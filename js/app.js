@@ -44,12 +44,18 @@
     "长夜晚安",
   ];
 
-  function buildAiPrompt() {
+  function buildAiPrompt(context = {}) {
     const known = SERIES_ORDER.map((key) => {
       const meta = SERIES[key];
       return `${meta.name}／${meta.cn || meta.name}`;
     }).join("、");
+    const localGuess = context.localLabel
+      ? `本地引擎初步校准：${context.localLabel}。`
+      : "本地引擎没有可用线索。";
+    const filename = context.filename ? `上传文件名为：${context.filename}。` : "";
     return `你是泡泡玛特及潮玩藏品的视觉鉴定师。请仔细看这张照片，识别其中的角色、IP 与系列。
+${localGuess}${filename}
+请独立复核本地结果，必要时使用可用的联网搜索工具核对角色/IP 与系列；不要因为本地初判而迁就它。AI 复核结果优先于本地结果。
 
 已知分类（英文／中文）：
 ${known}
@@ -79,6 +85,13 @@ ${known}
       base: "",
       model: "",
       hint: "按文件名、主色与画面特征归类，不联网。",
+    },
+    deepseek: {
+      label: "DeepSeek · 视觉 + 联网",
+      base: "https://api.deepseek.com",
+      model: "deepseek-flash",
+      hint: "DeepSeek V4.1 Flash 支持图像理解；识别时会自动开启 deepseek_web_search 联网核对。",
+      webSearch: true,
     },
     doubao: {
       label: "豆包 Seed Vision",
@@ -143,6 +156,10 @@ ${known}
       key: "",
       remember: false,
       configured: false,
+      verified: false,
+      lastError: "",
+      lastCallAt: 0,
+      calls: 0,
     },
     customSeries: [],
     filters: { series: "all", rarity: "all", favourite: false },
@@ -205,6 +222,10 @@ ${known}
 
     refreshDataViews();
     createStarDust();
+    if (window.StellarParticleTree && el.treeParticles) {
+      state.particleTree = new window.StellarParticleTree(el.treeParticles);
+      state.particleTree.setPaused(state.orbit.paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    }
     updatePreloader(0, Math.max(1, state.actItems.length), "正在布置第一幕");
 
     const initialRoute = getInitialRoute();
@@ -227,7 +248,6 @@ ${known}
     try {
       await Promise.all([
         preloadCurrentAct(),
-        preloadTreeImage(),
         document.fonts?.ready || Promise.resolve(),
         wait(450),
       ]);
@@ -236,6 +256,7 @@ ${known}
     }
     hidePreloader(true);
     state.orbit.active = state.route === "tree";
+    state.particleTree?.setActive(state.route === "tree");
     updateOrbitLayout();
     if (!state.items.length) {
       showToast("还没有藏品。去识藏室放入第一张照片吧。");
@@ -246,7 +267,7 @@ ${known}
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
       "topbar", "navCount", "treeView", "treeStage", "photoOrbit", "treeRing",
-      "treeSculpture", "treeShield", "starDust",
+      "treeSculpture", "treeShield", "treeParticles", "starDust",
       "heroCount", "heroSeriesCount", "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
       "actRailDots", "actRailCurrent", "actRailTotal", "actRailTitle",
       "actCounter", "actTitle", "mobileActCurrent", "mobileActTotal", "actAnnouncement",
@@ -261,7 +282,7 @@ ${known}
       "atelierSeriesList", "openAiSettings", "aiStatusText",
       "aiDrawer", "aiDrawerVeil", "aiDrawerClose", "aiForm", "aiProvider", "aiFields",
       "aiKey", "aiKeyToggle", "aiBase", "aiModel", "aiRemember", "aiProviderLinks",
-      "aiSave", "aiDisable", "aiFormStatus",
+      "aiSave", "aiTest", "aiDisable", "aiFormStatus",
       "viewer", "viewerBackdrop", "viewerClose", "viewerNo", "viewerTitle",
       "viewerTitleEn", "viewerSeries", "viewerRarity", "viewerStory",
       "viewerCollection", "viewerId", "viewerDate", "viewerConfidence",
@@ -286,7 +307,6 @@ ${known}
     el.viewer.setAttribute("inert", "");
     el.aiDrawer.inert = true;
     el.aiDrawer.setAttribute("inert", "");
-    el.treeImage = $("#treeSculpture img");
   }
 
   function bindStaticEvents() {
@@ -405,6 +425,7 @@ ${known}
     window.addEventListener("resize", () => {
       updateOrbitLayout();
       updateOrbitUI();
+      state.particleTree?.resize();
     });
     window.addEventListener("orientationchange", () => {
       window.setTimeout(updateOrbitLayout, 250);
@@ -476,12 +497,15 @@ ${known}
     if (target === "tree") {
       el.topbar.classList.remove("is-scrolled");
       state.orbit.active = true;
+      state.particleTree?.setPaused(state.orbit.paused);
+      state.particleTree?.setActive(true);
       window.requestAnimationFrame(() => {
         updateOrbitLayout();
         updateOrbitFrame(performance.now());
       });
     } else {
       state.orbit.active = false;
+      state.particleTree?.setActive(false);
       updateTopbarState();
       if (target === "collection") {
         renderCollection();
@@ -724,24 +748,6 @@ ${known}
     return item.thumb || item.src || "";
   }
 
-  function preloadTreeImage() {
-    return new Promise((resolve) => {
-      const image = el.treeImage;
-      if (!image) {
-        resolve();
-        return;
-      }
-      if (image.complete) {
-        resolve();
-        return;
-      }
-      const finish = () => resolve();
-      image.addEventListener("load", finish, { once: true });
-      image.addEventListener("error", finish, { once: true });
-      window.setTimeout(finish, 6000);
-    });
-  }
-
   async function renderAct(index, options = {}) {
     if (!state.acts.length) return;
     const target = ((index % state.acts.length) + state.acts.length) % state.acts.length;
@@ -804,6 +810,7 @@ ${known}
       }
     });
     if (el.treeRing) el.treeRing.style.animationPlayState = paused ? "paused" : "running";
+    state.particleTree?.setPaused(paused);
   }
 
   function updateOrbitLayout() {
@@ -1633,6 +1640,7 @@ ${known}
     el.viewer.setAttribute("aria-hidden", "false");
     document.body.classList.add("viewer-open");
     state.orbit.active = false;
+    state.particleTree?.setActive(false);
 
     renderViewerItem(index, { resetRotation: true });
     animateViewerEntry(origin);
@@ -1864,6 +1872,8 @@ ${known}
     if (state.route === "tree") {
       state.orbit.active = true;
       state.orbit.lastTime = performance.now();
+      state.particleTree?.setPaused(state.orbit.paused);
+      state.particleTree?.setActive(true);
     }
   }
 
@@ -2012,6 +2022,10 @@ ${known}
         key: typeof stored.key === "string" ? stored.key : "",
         remember: Boolean(stored.remember),
         configured: provider !== "local" && Boolean(stored.key && (stored.model || stored.base)),
+        verified: false,
+        lastError: "",
+        lastCallAt: 0,
+        calls: 0,
       };
     }
     updateAiStatus();
@@ -2038,13 +2052,28 @@ ${known}
 
   function updateAiStatus() {
     if (!el.aiStatusText) return;
-    const on = state.ai.configured;
-    el.aiStatusText.textContent = on ? `${AI_PRESETS[state.ai.provider].label} · 已接入` : "本地识别";
-    el.openAiSettings?.classList.toggle("is-on", on);
+    const configured = state.ai.configured;
+    const failed = configured && Boolean(state.ai.lastError);
+    const verified = configured && state.ai.verified && !failed;
+    const label = configured ? AI_PRESETS[state.ai.provider]?.label || "AI" : "本地识别";
+    el.aiStatusText.textContent = !configured
+      ? "本地识别"
+      : failed
+        ? `${label} · 调用失败`
+        : verified
+          ? `${label} · 已验证`
+          : `${label} · 已配置`;
+    el.openAiSettings?.classList.toggle("is-on", verified);
+    el.openAiSettings?.classList.toggle("is-pending", configured && !verified && !failed);
+    el.openAiSettings?.classList.toggle("is-error", failed);
     if (el.openAiSettings) {
-      el.openAiSettings.setAttribute("aria-label", on ? "AI 识别已接入，打开设置" : "接入 AI 识别");
+      el.openAiSettings.setAttribute(
+        "aria-label",
+        configured ? `${label}${verified ? "已验证" : failed ? "调用失败" : "已配置，尚未验证"}，打开设置` : "接入 AI 识别",
+      );
+      el.openAiSettings.title = el.aiStatusText.textContent;
       const em = $("em", el.openAiSettings);
-      if (em) em.textContent = on ? "设置" : "接入 AI";
+      if (em) em.textContent = configured ? "设置" : "接入 AI";
     }
   }
 
@@ -2073,7 +2102,13 @@ ${known}
     el.aiModel.value = state.ai.model;
     el.aiRemember.checked = state.ai.remember;
     applyAiProviderPreset(state.ai.provider, { keepValues: true });
-    el.aiFormStatus.textContent = state.ai.configured ? "已接入，可直接上传照片使用。" : "填入 API Key 后保存；识别失败会自动回退到本地。";
+    el.aiFormStatus.textContent = state.ai.configured
+      ? state.ai.lastError
+        ? `上次调用失败：${state.ai.lastError}`
+        : state.ai.verified
+          ? "已通过真实调用验证；上传照片时会再次调用 AI。"
+          : "已配置但尚未验证。点击「测试连接」会真实调用一次接口。"
+      : "填入 API Key 后保存；保存时会真实调用一次接口验证，不会只显示“已接入”。";
     window.setTimeout(() => el.aiProvider.focus({ preventScroll: true }), 100);
   }
 
@@ -2103,12 +2138,15 @@ ${known}
       return false;
     }
     state.ai = {
+      ...state.ai,
       provider,
       base,
       model,
       key,
       remember: el.aiRemember.checked,
       configured: provider !== "local" && Boolean(key && (model || base)),
+      verified: false,
+      lastError: "",
     };
     persistAiSettings();
     updateAiStatus();
@@ -2137,12 +2175,41 @@ ${known}
       el.aiKeyToggle.textContent = showing ? "显示" : "隐藏";
     });
 
-    el.aiForm?.addEventListener("submit", (event) => {
+    el.aiForm?.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (saveAiSettingsFromForm()) {
-        window.setTimeout(closeAiDrawer, 500);
-        showToast(state.ai.configured ? `AI 识藏已接入 · ${AI_PRESETS[state.ai.provider].label}` : "已切回本地识别");
+      if (!saveAiSettingsFromForm()) return;
+      if (state.ai.provider === "local") {
+        window.setTimeout(closeAiDrawer, 300);
+        showToast("已切回本地识别");
+        return;
       }
+      el.aiSave.disabled = true;
+      el.aiFormStatus.textContent = "正在真实调用接口验证（不是只保存配置）…";
+      const result = await testAiConnection();
+      el.aiSave.disabled = false;
+      if (!result.ok) {
+        el.aiFormStatus.textContent = `真实调用失败：${result.error}`;
+        showToast(`AI 真实调用失败：${result.error}`);
+        return;
+      }
+      el.aiFormStatus.textContent = "真实调用成功，接口已有响应。识图时还会再调用一次。";
+      showToast(`AI 接口已验证 · ${AI_PRESETS[state.ai.provider].label}`);
+      window.setTimeout(closeAiDrawer, 800);
+    });
+
+    el.aiTest?.addEventListener("click", async () => {
+      if (!saveAiSettingsFromForm()) return;
+      if (state.ai.provider === "local") {
+        el.aiFormStatus.textContent = "当前是本地识别，无需调用 API。";
+        return;
+      }
+      el.aiTest.disabled = true;
+      el.aiFormStatus.textContent = "正在真实调用接口验证…";
+      const result = await testAiConnection();
+      el.aiTest.disabled = false;
+      el.aiFormStatus.textContent = result.ok
+        ? "真实调用成功，已收到模型响应。"
+        : `真实调用失败：${result.error}`;
     });
 
     el.aiDisable?.addEventListener("click", () => {
@@ -2197,60 +2264,136 @@ ${known}
     return meta ? meta.key : null;
   }
 
-  async function classifyWithAi(previewUrl) {
-    if (!state.ai.configured || state.ai.provider === "local" || !state.ai.key) return null;
+  function aiEndpoint() {
     const base = (state.ai.base || AI_PRESETS[state.ai.provider]?.base || "").replace(/\/+$/, "");
-    const model = state.ai.model || AI_PRESETS[state.ai.provider]?.model;
-    if (!base || !model) throw new Error("AI 接口的 Base URL 或模型为空");
-    const endpoint = /\/chat\/completions$/i.test(base) ? base : `${base}/chat/completions`;
-    const dataUrl = await imageToDataUrl(previewUrl);
+    if (!base) throw new Error("AI 接口的 Base URL 为空");
+    return /\/chat\/completions$/i.test(base) ? base : `${base}/chat/completions`;
+  }
+
+  async function postAiChat(payload, timeoutMs = 40000) {
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 40000);
-    let response;
+    const timer = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
-      response = await fetch(endpoint, {
+      const response = await fetch(aiEndpoint(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${state.ai.key}`,
         },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "user",
-              content: [
-                { type: "text", text: buildAiPrompt() },
-                { type: "image_url", image_url: { url: dataUrl } },
-              ],
-            },
-          ],
-          temperature: 0.1,
-          max_tokens: 420,
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
+      window.clearTimeout(timer);
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const body = await response.json();
+          detail = body?.error?.message || body?.message || "";
+        } catch {}
+        throw new Error(`AI 接口返回 ${response.status}${detail ? `：${detail.slice(0, 110)}` : ""}`);
+      }
+      return response;
     } catch (error) {
       window.clearTimeout(timer);
       if (error?.name === "AbortError") throw new Error("AI 接口超时");
+      if (String(error?.message || "").startsWith("AI 接口返回")) throw error;
       throw new Error("AI 接口连接失败（可能是跨域或网络问题）");
     }
-    window.clearTimeout(timer);
-    if (!response.ok) {
-      let detail = "";
-      try {
-        const body = await response.json();
-        detail = body?.error?.message || body?.message || "";
-      } catch {}
-      throw new Error(`AI 接口返回 ${response.status}${detail ? `：${detail.slice(0, 90)}` : ""}`);
+  }
+
+  async function testAiConnection() {
+    if (!state.ai.configured || state.ai.provider === "local") {
+      return { ok: false, error: "还没有配置 AI 接口" };
     }
+    const model = state.ai.model || AI_PRESETS[state.ai.provider]?.model;
+    if (!model) return { ok: false, error: "模型 ID 为空" };
+    try {
+      const response = await postAiChat({
+        model,
+        messages: [{ role: "user", content: "这是接口连通性测试。请只回复 OK。" }],
+        temperature: 0,
+        max_tokens: 16,
+      }, 30000);
+      const data = await response.json();
+      const text = data?.choices?.[0]?.message?.content;
+      if (text == null) throw new Error("接口返回成功，但没有 choices 内容");
+      state.ai.verified = true;
+      state.ai.lastError = "";
+      state.ai.lastCallAt = Date.now();
+      state.ai.calls += 1;
+      updateAiStatus();
+      return { ok: true, sample: String(Array.isArray(text) ? text.map((p) => p?.text || "").join("") : text).slice(0, 60) };
+    } catch (error) {
+      const message = error?.message || "接口调用失败";
+      state.ai.verified = false;
+      state.ai.lastError = message;
+      updateAiStatus();
+      return { ok: false, error: message };
+    }
+  }
+
+  async function classifyWithAi(previewUrl, context = {}) {
+    if (!state.ai.configured || state.ai.provider === "local" || !state.ai.key) return null;
+    const model = state.ai.model || AI_PRESETS[state.ai.provider]?.model;
+    if (!model) throw new Error("AI 接口的模型为空");
+    const dataUrl = await imageToDataUrl(previewUrl);
+    const useWebSearch = state.ai.provider === "deepseek";
+    const prompt = buildAiPrompt(context);
+    const payload = {
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 620,
+    };
+    let webSearchUsed = useWebSearch;
+    if (useWebSearch) {
+      // Chat Completions uses the server-tool type only; the `name` field is
+      // for the Messages protocol and may be rejected by stricter gateways.
+      payload.tools = [{ type: "deepseek_web_search" }];
+    }
+    let response;
+    try {
+      response = await postAiChat(payload, 60000);
+    } catch (error) {
+      // If a provider rejects the built-in search declaration, retry once
+      // without tools and keep the visual answer usable.
+      if (useWebSearch) {
+        try {
+          const fallbackPayload = { ...payload };
+          delete fallbackPayload.tools;
+          response = await postAiChat(fallbackPayload, 40000);
+          webSearchUsed = false;
+        } catch (retryError) {
+          state.ai.lastError = retryError?.message || error?.message || "AI 调用失败";
+          updateAiStatus();
+          throw retryError;
+        }
+      } else {
+        state.ai.lastError = error?.message || "AI 调用失败";
+        updateAiStatus();
+        throw error;
+      }
+    }
+    state.ai.verified = true;
+    state.ai.lastError = "";
+    state.ai.lastCallAt = Date.now();
+    state.ai.calls += 1;
+    updateAiStatus();
     const data = await response.json();
     const content = data?.choices?.[0]?.message?.content;
     const text = Array.isArray(content)
       ? content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("")
       : String(content || "");
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("AI 返回内容不是有效 JSON");
+    if (!match) throw new Error("AI 调用成功，但返回内容不是 JSON");
     let parsed;
     try {
       parsed = JSON.parse(match[0]);
@@ -2280,6 +2423,8 @@ ${known}
     return {
       seriesKey: known ? known.key : null,
       newSeries,
+      isPopmart: parsed.is_popmart !== false,
+      webSearchUsed,
       title: typeof parsed.title === "string" ? parsed.title.trim().slice(0, 12) : "",
       character: typeof parsed.character === "string" ? parsed.character.trim().slice(0, 32) : "",
       reason: typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 60) : "",
@@ -2408,7 +2553,7 @@ ${known}
     el.scanProgressLabel.textContent = `0 / ${batch.length}`;
     el.scanBar.style.width = "0%";
     el.scanCaption.textContent = state.ai.configured
-      ? `正在调用 ${AI_PRESETS[state.ai.provider].label} 看图…`
+      ? "先做本地校准，再交给 AI 复核…"
       : "正在读取轮廓、配色与系列特征…";
     el.confirmImport.disabled = true;
 
@@ -2433,11 +2578,18 @@ ${known}
       const thumbEl = el.scanGrid.querySelector(`[data-scan-index="${i}"]`);
       thumbEl?.classList.add("is-scanning");
       el.scanCaption.textContent = state.ai.configured
-        ? `${AI_PRESETS[state.ai.provider].label} 正在识别第 ${i + 1} 张…`
+        ? `第 ${i + 1} 张 · 本地校准中…`
         : `正在分析第 ${i + 1} 张照片…`;
       await wait(state.ai.configured ? 80 : 190);
       try {
-        const result = await analyseUpload(file, previewUrls[i]);
+        const result = await analyseUpload(file, previewUrls[i], ({ phase, label }) => {
+          if (phase === "local") {
+            el.scanCaption.textContent = `第 ${i + 1} 张 · 本地校准：${label}${state.ai.configured ? " · 准备 AI 复核…" : ""}`;
+          } else if (phase === "ai") {
+            const web = state.ai.provider === "deepseek" ? "联网检索复核" : "AI 复核";
+            el.scanCaption.textContent = `第 ${i + 1} 张 · ${label} ${web}中…`;
+          }
+        });
         results.push(result);
         if (result.aiAttempted && !result.aiUsed) {
           aiFailures += 1;
@@ -2488,39 +2640,81 @@ ${known}
     }
   }
 
-  async function analyseUpload(file, previewUrl) {
+  async function analyseUpload(file, previewUrl, onStage) {
     const image = await loadImage(previewUrl);
     const features = analysePixels(image);
     features.extraSeed = file.size || 0;
     const localMatch = classifyByName(file.name) || classifyBrandHint(file.name) || classifyByColour(features);
+    const localMeta = localMatch.meta;
+    const localLabel = localMeta
+      ? `${localMeta.name} · ${localMeta.cn}`
+      : localMatch.customSeries
+        ? `${localMatch.customSeries.name} · ${localMatch.customSeries.cn}`
+        : "无法判断";
+    onStage?.({ phase: "local", label: localLabel });
+
     let aiResult = null;
     let aiAttempted = false;
     let aiError = "";
     if (state.ai.configured) {
       aiAttempted = true;
+      onStage?.({ phase: "ai", label: AI_PRESETS[state.ai.provider].label });
       try {
-        aiResult = await classifyWithAi(previewUrl);
+        aiResult = await classifyWithAi(previewUrl, { localLabel, filename: file.name });
         if (!aiResult) aiError = "模型没有辨认出系列";
       } catch (error) {
         aiError = error?.message || "AI 接口失败";
+        state.ai.lastError = aiError;
+        updateAiStatus();
       }
     }
+
     let aiMeta = null;
     if (aiResult?.newSeries) {
-      aiMeta = createCustomSeries({ ...aiResult.newSeries, aiCreated: true });
+      let newSeries = { ...aiResult.newSeries };
+      // The requested rule: if the AI confirms this is not a Pop Mart series,
+      // derive the new category from the uploaded file name when it contains
+      // a meaningful name; otherwise use the AI's proposed category.
+      if (aiResult.isPopmart === false) {
+        const filenameCategory = categoryFromFilename(file.name);
+        if (filenameCategory) {
+          newSeries = {
+            ...newSeries,
+            name: filenameCategory.name,
+            cn: newSeries.cn || filenameCategory.cn,
+            collection: "图片名称归档",
+            collectionEn: "FILE ARCHIVE",
+            intro: `根据图片文件名「${filenameCategory.name}」建立的非泡泡玛特分类。`,
+          };
+        }
+      }
+      aiMeta = createCustomSeries({ ...newSeries, aiCreated: true });
     } else if (aiResult?.seriesKey) {
       aiMeta = findSeries(aiResult.seriesKey);
     }
-    let localMeta = localMatch.meta;
-    if (!localMeta && localMatch.customSeries) {
-      localMeta = createCustomSeries({ ...localMatch.customSeries, aiCreated: false });
+    let resolvedLocalMeta = localMeta;
+    if (!aiMeta && !resolvedLocalMeta && localMatch.customSeries) {
+      resolvedLocalMeta = createCustomSeries({ ...localMatch.customSeries, aiCreated: false });
     }
-    const meta = aiMeta || localMeta || findSeries(OTHER_SERIES_KEY) || SERIES.molly;
+    const meta = aiMeta || resolvedLocalMeta || findSeries(OTHER_SERIES_KEY) || SERIES.molly;
     const thumbBlob = await resizeToBlob(image, 500, 625, 0.84);
     const fullBlob = await resizeToBlob(image, 1400, 1750, 0.88);
     if (!thumbBlob || !fullBlob) throw new Error("Could not encode image");
     const localTitle = makeTitle(file.name, meta, features);
     const title = aiResult?.title || localTitle;
+    const aiUsed = Boolean(aiMeta);
+    const providerLabel = aiUsed ? AI_PRESETS[state.ai.provider].label : "";
+    const engineShort = !aiUsed
+      ? "本地"
+      : state.ai.provider === "deepseek"
+        ? "DeepSeek"
+        : state.ai.provider === "doubao"
+          ? "豆包 AI"
+          : state.ai.provider === "siliconflow"
+            ? "硅基 AI"
+            : state.ai.provider === "openrouter"
+              ? "OpenRouter"
+              : "AI";
     return {
       file,
       previewUrl,
@@ -2528,26 +2722,21 @@ ${known}
       fullBlob,
       seriesKey: meta.key,
       manual: false,
-      confidence: aiResult ? aiResult.confidence : localMatch.confidence,
+      confidence: aiUsed ? aiResult.confidence : localMatch.confidence,
       title,
       width: image.naturalWidth,
       height: image.naturalHeight,
       createdAt: Date.now(),
       demo: false,
       aiAttempted,
-      aiUsed: Boolean(aiMeta),
-      aiError: aiAttempted && !aiMeta ? (aiError || "模型没有辨认出系列") : aiError,
-      engine: aiResult ? AI_PRESETS[state.ai.provider].label : (localMatch.customSeries ? "本地主色新分类" : "本地识别"),
-      engineShort: aiResult
-        ? state.ai.provider === "doubao"
-          ? "豆包 AI"
-          : state.ai.provider === "siliconflow"
-            ? "硅基 AI"
-            : state.ai.provider === "openrouter"
-              ? "OpenRouter"
-              : "AI"
-        : "本地",
+      aiUsed,
+      aiResponded: Boolean(aiResult),
+      aiError: aiAttempted && !aiUsed ? (aiError || "模型没有辨认出系列") : aiError,
+      engine: aiUsed ? providerLabel : (localMatch.customSeries ? "本地主色新分类" : "本地识别"),
+      engineShort,
       aiReason: aiResult?.reason || "",
+      aiWebSearch: Boolean(aiResult?.webSearchUsed),
+      localGuess: localLabel,
     };
   }
 
@@ -2739,6 +2928,16 @@ ${known}
     return diff > 180 ? 360 - diff : diff;
   }
 
+  function categoryFromFilename(filename) {
+    let base = String(filename || "").replace(/\.[^.]+$/, "");
+    base = base.replace(/(img|dsc|dscn|pxl|screenshot|image|photo|微信图片|wx[ _-]?camera|mmexport|wechat|截屏)/gi, " ");
+    base = base.replace(/[\s_-]*\(?\d{2,}\)?$/g, " ").trim();
+    base = base.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (base.length < 2 || !/[a-zA-Z\u4e00-\u9fff]/.test(base)) return null;
+    if (/^(image|photo|screenshot|微信图片|截屏)$/i.test(base)) return null;
+    return { name: base.toUpperCase().slice(0, 32), cn: base.slice(0, 20) };
+  }
+
   function makeTitle(filename, meta, features) {
     const cleaned = String(filename || "")
       .replace(/\.[^.]+$/, "")
@@ -2798,6 +2997,15 @@ ${known}
               <span class="result-card__confidence">${result.manual ? "手动确认" : `${escapeHTML(result.engineShort || "本地")} ${Math.round(result.confidence * 100)}%`}</span>
             </div>
             <p class="result-card__title">${escapeHTML(result.title)}</p>
+            <p class="result-card__trace">${
+              result.aiAttempted
+                ? result.aiUsed
+                  ? `本地：${escapeHTML(result.localGuess || "未判断")} → ${result.aiWebSearch ? "DeepSeek 联网" : escapeHTML(result.engineShort || "AI")}复核：${escapeHTML(meta.name)}`
+                  : result.aiResponded
+                    ? `本地：${escapeHTML(result.localGuess || "未判断")} → AI 未给出可用分类，已回退本地`
+                    : `本地：${escapeHTML(result.localGuess || "未判断")} → AI 调用失败，已回退本地`
+                : `本地：${escapeHTML(result.localGuess || "未判断")}${state.ai.configured ? "" : "（未启用 AI）"}`
+            }</p>
             <div class="result-card__select-wrap">
               <span>归入系列</span>
               <select data-result-series="${index}" aria-label="为第 ${index + 1} 张照片选择系列">

@@ -1,7 +1,7 @@
 # 星屿藏馆 · STELLAR ARCHIVE
 
 一个可以直接在浏览器里打开的私人泡泡玛特电子藏品馆。
-200 件示例藏品分成八幕，围着新绘制的写实常青圣诞树逐幕流转；点开照片可以拖拽旋转 360° 欣赏，另设独立藏品馆与支持 AI 的识藏室。
+200 件示例藏品分成八幕，围着 Canvas 粒子光雕圣诞树逐幕流转；点开照片可以拖拽旋转 360° 欣赏，另设独立藏品馆与支持 AI 的识藏室。
 
 分类从原来的 10 个扩到 **27 个**，并允许本地引擎与接入的 AI 根据识别结果**自动建立新的分类**；新分类会保存在本机，出现在筛选、结果和后续识别中。
 
@@ -16,14 +16,16 @@
 
 ## 这次重做了什么
 
-- **再次换树**：旧线框树与层叠 SVG 都已移除。新树由 `scripts/build_tree_art.py` 离线绘制成一张带透明通道的常青树 WebP：数千笔松针、真实聚光灯、玻璃挂饰、暖灯与星芒；不再像平面插画，也不再是铁丝树。
+- **换成粒子光雕树**：旧线框、层叠 SVG 和静态 WebP 都已移除。新树由 `js/tree-particles.js` 在 Canvas 上实时绘制：数千颗粒子组成常青树体，暖金灯点、玻璃挂饰、星芒与缓慢闪烁；不依赖图片加载，手机端不会再出现树空白。
 - **分类扩充**：内置 27 个本地分类，覆盖泡泡玛特官方主要 IP（连同 THE MONSTERS、HACIPUPU、TWINKLE TWINKLE、KUBO、ZSIGA、POLAR、PINO JELLY、DUCKOO、1001MOONS、SUPERTUTU、PEACH RIOT、CHAKA、TINY TINY、MERODI、KEYA、RIBODIARY 等），另加自由收藏。
 - **分类可以被识别引擎扩展**：本地引擎与接入的 AI 都获得建立新分类的权限。遇到未知泡泡玛特 IP、其他品牌或无法硬套的藏品时，会按识别结果建立新分类；新分类写入浏览器，并标记为 `NEW`。
 - **照片更大更清楚**：轨道一次只承载一幕（最多 25 件）的大照片；首屏加载 500×625 的卡片图，点击后再读取高清全图。
 - **照片真正环绕**：25 张卡片沿椭圆轨道缓慢移动，按景深缩放、淡入淡出；转到树后会被树自然遮住。
 - **手机不再被遮挡**：馆内导航移回顶部，移除了固定在底部的导航条与底部大控制台；页面底部现在留给内容本身。
 - **更顺的开场**：去掉 WebGL 初始化与 200 张纹理；只预载当前一幕，轨道用 `transform` + `opacity` 合成层运动。
-- **接入 AI 识藏**：在识藏室可选择豆包 Seed Vision、硅基流动、OpenRouter 或任意 OpenAI 兼容视觉接口，用你自己的 API Key 直接看图识别。
+- **接入 AI 识藏**：在识藏室可选择 DeepSeek（视觉 + 联网检索）、豆包 Seed Vision、硅基流动、OpenRouter 或任意 OpenAI 兼容视觉接口，用你自己的 API Key 直接看图识别。
+- **真实调用验证**：保存 AI 配置时会真实调用一次接口；失败会留在设置面板并显示错误，不再只把“已接入”写在界面上。每次识图的结果卡也会显示「本地初判 → AI 复核」轨迹。
+- **AI 复核优先**：先由本地引擎校准，再由 AI 看图（DeepSeek 可联网检索）复核；两者不一致时以 AI 结果为准。若 AI 确认不是泡泡玛特系列，会优先用上传图片名建立新分类。
 
 | 手机端 | 360° 查看 |
 | --- | --- |
@@ -71,7 +73,7 @@ node server.mjs
 
 由 `scripts/generate_placeholders.py` 使用 Pillow + NumPy 离线绘制；
 `scripts/generate_cards.py` 从全图生成 500 px 卡片图；
-`scripts/build_tree_art.py` 生成新版圣诞树 `assets/tree-noel.webp`。
+`js/tree-particles.js` 用 Canvas 实时绘制粒子圣诞树，不需要图片资源。
 
 样张分布：
 
@@ -84,7 +86,6 @@ node server.mjs
 ```bash
 python scripts/generate_placeholders.py
 python scripts/generate_cards.py
-python scripts/build_tree_art.py
 ```
 
 > 需要 Python 3.10+、Pillow、NumPy。第一条命令会重写 `js/collection-data.js`。
@@ -118,6 +119,15 @@ python scripts/build_tree_art.py
 
 在火山方舟控制台开通视觉模型后，把 Key 与模型/接入点 ID 填进来。免费额度、模型可用性和计费以方舟控制台为准；项目本身不内置任何 Key。
 
+### DeepSeek（视觉 + 联网）
+
+- 引擎：`DeepSeek · 视觉 + 联网`
+- Base URL：`https://api.deepseek.com`
+- 默认模型：`deepseek-flash`
+- 获取 Key：<https://platform.deepseek.com/api_keys>
+
+DeepSeek 官方 Chat Completions 支持图像输入与内置 `deepseek_web_search` 工具。启用后，请求会携带图片与搜索工具，模型可联网核对 IP/角色；如果服务端不支持工具参数，项目会自动重试一次纯视觉请求，并在结果卡中标注「AI 复核」而不是「联网」。DeepSeek 的浏览器端 CORS 已探测可用。
+
 ### 其他兼容引擎
 
 - 硅基流动：`https://api.siliconflow.cn/v1`，默认模型 `Qwen/Qwen2.5-VL-32B-Instruct`
@@ -125,6 +135,17 @@ python scripts/build_tree_art.py
 - 任意 OpenAI 兼容视觉接口：填入自己的 Base URL 和模型 ID
 
 请求由浏览器直接发往你选择的服务商。项目不会把 Key 写到 GitHub，也没有自己的后端；因此在公开网页里内置一把公共 Key 是不安全的，这里采用每人填自己 Key 的方式。
+
+### 先本地、再 AI
+
+识藏时会按这个顺序执行：
+
+1. 本地引擎先按文件名/IP/品牌线索校准；没有线索时按主色建立可复用分类。
+2. 如果配置了 AI，再带图片调用 AI；DeepSeek 可启用联网搜索。
+3. 本地与 AI 不一致时使用 AI 的系列结果。
+4. AI 确认不是泡泡玛特系列时，优先用上传文件名的可读部分建立新分类；文件名不可读时使用 AI 提议的分类。
+
+结果卡会显示类似「本地：MOLLY → DeepSeek 联网复核：LABUBU」的轨迹。保存 AI 配置或点击「测试连接」都会真实调用接口；只有收到响应才显示验证成功，失败会显示具体错误。
 
 ### AI 可以新建分类
 
@@ -157,9 +178,9 @@ starlit-archive/
 ├── js/
 │   ├── series.js                   27 个内置分类、关键词与常用工具
 │   ├── collection-data.js          200 件示例藏品数据（自动生成）
+│   ├── tree-particles.js           Canvas 粒子圣诞树
 │   └── app.js                      路由、八幕轨道、藏品馆、360° 查看器、识藏、动态分类、IndexedDB、AI
 ├── assets/
-│   ├── tree-noel.webp              新版写实常青树
 │   ├── fonts/                      Cormorant Garamond + Manrope
 │   ├── photos/full/                200 张 720×900 示例全图
 │   ├── photos/card/                200 张 500×625 轨道卡片图
@@ -167,8 +188,7 @@ starlit-archive/
 │   └── preview/                    预览与分享封面
 └── scripts/
     ├── generate_placeholders.py    生成原创示例藏品图
-    ├── generate_cards.py           生成轨道卡片图
-    └── build_tree_art.py           生成写实圣诞树 WebP
+    └── generate_cards.py           生成轨道卡片图
 ```
 
 ---
@@ -177,7 +197,7 @@ starlit-archive/
 
 - **八幕轨道**：`ACT_SIZE = 25`，当前 200 件正好分为八幕。每幕是一次小规模预载；下一幕加载完成后再淡入，避免所有照片同时占内存。
 - **景深与遮挡**：卡片按轨道角度缩放、改变透明度；进入树体范围的卡片会被淡出，并由透明遮罩挡住点击，避免树后堆出一片“幽灵照片”。
-- **新圣诞树**：静态 1200×1700 WebP，一次性加载；由数千笔松针、分层暗部、灯光、玻璃挂饰和星芒组合而成，不再使用 WebGL 或平面 SVG 层片。
+- **新圣诞树**：Canvas 2D 粒子光雕，不依赖 WebGL 或图片加载；常青树体由 2900–5200 个静态粒子组成，每帧只重绘灯点、挂饰、星芒和少量浮尘。手机端使用更低的粒子量与 DPR 上限。
 - **清晰度**：卡片使用 500 px 源图，显示宽度约 150–215 CSS px，在高分屏上仍有余量；查看器才加载 720×900 全图。
 - **手机布局**：顶部导航保持 44 px 触控高度；星树控制条在标题下方；没有固定底部导航遮挡内容。
 - **分类系统**：内置 27 个分类；新分类保存在 `localStorage`，会重新生成筛选、结果下拉和 AI 提示词。带「待」的分类表示尚未收进照片。
@@ -189,7 +209,7 @@ starlit-archive/
 ## 兼容性
 
 - 推荐最新版 Chrome / Edge / Safari。
-- **不再需要 WebGL**；首屏是 DOM、CSS 与一张带透明通道的 WebP 树。
+- **不再需要 WebGL**；首屏是 DOM、CSS、卡片图与一张 Canvas 粒子树。
 - 通过本地 HTTP 服务或 GitHub Pages 打开；`file://` 下 IndexedDB 与部分字体/接口会受限。
 - AI 接口使用浏览器直连，是否可用取决于服务商 CORS 策略。若线上豆包可用而本地调试被 CORS 拒绝，属于浏览器端接口限制，不是项目代码报错。
 
@@ -198,10 +218,13 @@ starlit-archive/
 ## 常见问题
 
 **页面停在“正在点亮星树”**
-首屏在预载 25 张卡片图与树 WebP。正常网络下很快完成；若超过十几秒，刷新页面或检查本地服务是否运行。
+首屏在预载 25 张卡片图；粒子树本身不依赖图片，正常网络下很快完成。若超过十几秒，刷新页面或检查本地服务是否运行。
 
 **双击 index.html 打开是空白 / 照片不显示**
 请用 `start.bat` 或 `node server.mjs` 通过 HTTP 访问。
+
+**手机打开还是旧版 / 看不到粒子树**
+刷新一次页面；样式和脚本已带版本参数，通常刷新即可。如果仍停在旧版，清除该站点的缓存或用无痕窗口打开。
 
 **导入照片后星树怎么没有全部出现？**
 轨道一次展示一幕。换到下一幕即可看到下一组；全部 200 件在「藏馆」里始终可以搜索、筛选和查看。

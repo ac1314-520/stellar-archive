@@ -5368,21 +5368,20 @@ body.viewer-open .view {
 
 .tree-sculpture {
   position: absolute;
-  top: 50.5%;
+  top: 49.8%;
   left: 65.5%;
   z-index: 6;
-  width: min(34.5vw, 480px);
+  width: min(35.5vw, 500px);
   transform: translate(-50%, -50%);
   pointer-events: none;
   animation: sculptureFloat 9s ease-in-out infinite;
 }
-.tree-sculpture img {
+.tree-sculpture canvas {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 1200 / 1700;
   pointer-events: none;
-  filter: brightness(1.14) saturate(1.05) drop-shadow(0 34px 45px rgba(0, 0, 0, 0.48));
 }
 .tree-sculpture::after {
   content: "";
@@ -5422,7 +5421,7 @@ body.viewer-open .view {
   position: absolute;
   bottom: 1.8%;
   left: 50%;
-  width: 52%;
+  width: 62%;
   height: 6.5%;
   transform: translateX(-50%);
   border-radius: 50%;
@@ -6147,7 +6146,13 @@ body.viewer-open .view {
 .local-badge.ai-status-btn {
   border: 1px solid rgba(231, 194, 147, 0.14);
   cursor: pointer;
+  max-width: 270px;
   transition: border-color 0.3s, background 0.3s, color 0.3s;
+}
+.local-badge.ai-status-btn #aiStatusText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .local-badge.ai-status-btn:hover {
   border-color: rgba(231, 194, 147, 0.5);
@@ -6359,6 +6364,28 @@ body.viewer-open .view {
   opacity: 0.34;
   pointer-events: none;
 }
+.local-badge.ai-status-btn.is-pending {
+  border-color: rgba(231, 194, 147, 0.3);
+  color: rgba(231, 194, 147, 0.7);
+}
+.local-badge.ai-status-btn.is-pending i {
+  background: #d5b278;
+}
+.local-badge.ai-status-btn.is-error {
+  border-color: rgba(211, 117, 111, 0.45);
+  color: rgba(239, 170, 160, 0.9);
+}
+.local-badge.ai-status-btn.is-error i {
+  background: #d3766f;
+  box-shadow: 0 0 8px rgba(211, 118, 111, 0.6);
+}
+.result-card__trace {
+  margin: 6px 0 0;
+  color: rgba(217, 200, 183, 0.34);
+  font-size: 7px;
+  letter-spacing: 0.02em;
+  line-height: 1.65;
+}
 .ai-remember {
   display: flex;
   align-items: center;
@@ -6429,6 +6456,9 @@ body.ai-open .view {
   .ai-drawer__head h2 {
     margin-top: 14px;
     font-size: 31px;
+  }
+  .local-badge.ai-status-btn {
+    max-width: 190px;
   }
   .ai-drawer__lede {
     margin: 17px 0 22px;

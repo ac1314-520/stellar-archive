@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="200 件泡泡玛特藏品围着粒子光雕圣诞树逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
+  <meta name="description" content="200 件泡泡玛特藏品围着 3D 旋转圣诞树逐幕流转，树与照片一起缓慢转台，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0a0507">
   <meta name="color-scheme" content="dark">
@@ -12,21 +12,21 @@
   <meta property="og:locale" content="zh_CN">
   <meta property="og:site_name" content="星屿藏馆 · STELLAR ARCHIVE">
   <meta property="og:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta property="og:description" content="200 件泡泡玛特藏品围着粒子光雕圣诞树逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
+  <meta property="og:description" content="200 件泡泡玛特藏品围着 3D 旋转圣诞树逐幕流转，树与照片一起缓慢转台，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
   <meta property="og:url" content="https://ac1314-520.github.io/stellar-archive/">
   <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="星屿藏馆：粒子光雕圣诞树与环绕旋转的泡泡玛特藏品照片">
+  <meta property="og:image:alt" content="星屿藏馆：3D 圣诞树与环绕旋转的泡泡玛特藏品照片">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta name="twitter:description" content="200 件泡泡玛特藏品围着粒子光雕圣诞树逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
+  <meta name="twitter:description" content="200 件泡泡玛特藏品围着 3D 旋转圣诞树逐幕流转，树与照片一起缓慢转台，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
   <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <title>星屿藏馆 · 泡泡玛特圣诞电子藏品馆</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261120a">
+  <link rel="stylesheet" href="css/styles.css?v=20261120b">
 </head>
 <body>
   <a class="skip-link" href="#collection">跳到藏品馆</a>
@@ -102,18 +102,17 @@
       <div class="tree-view__bloom" aria-hidden="true"></div>
       <div class="star-dust" id="starDust" aria-hidden="true"></div>
 
-      <div class="tree-stage" id="treeStage" aria-label="二十五幅藏品照片围绕圣诞树缓慢环绕。点击照片可以放大欣赏。">
+      <div class="tree-stage" id="treeStage" aria-label="圣诞树与当前一幕的十幅藏品照片一起缓慢旋转。点击照片可以放大欣赏。">
         <div class="tree-stage__halo" aria-hidden="true"></div>
-        <div class="tree-stage__ring" id="treeRing" aria-hidden="true"></div>
-        <div class="photo-orbit" id="photoOrbit"></div>
         <div class="tree-stage__floor" aria-hidden="true"></div>
-        <div class="tree-sculpture" id="treeSculpture" aria-hidden="true">
-          <div class="tree-sculpture__aura"></div>
-          <canvas class="tree-particles" id="treeParticles" aria-hidden="true"></canvas>
-          <div class="tree-sculpture__base"></div>
+        <div class="tree-sculpture" id="treeSculpture">
+          <div class="tree-sculpture__aura" aria-hidden="true"></div>
+          <canvas class="tree-canvas" id="treeCanvas" aria-hidden="true"></canvas>
+          <img class="tree-fallback-image" id="treeFallback" src="assets/tree-fallback.webp?v=20261120b" alt="圣诞树静态展示" hidden>
         </div>
-        <div class="tree-stage__shield" id="treeShield" aria-hidden="true"></div>
+        <div class="photo-orbit" id="photoOrbit" hidden></div>
       </div>
+      <div class="sr-only" id="treePhotoList" aria-label="当前幕的照片"></div>
 
       <div class="hero">
         <p class="eyebrow hero__eyebrow">
@@ -155,7 +154,7 @@
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
           </button>
         </div>
-        <p class="hero__orbit-hint">拖动环绕 · 点击照片放大 · 一幕接一幕</p>
+        <p class="hero__orbit-hint">拖动旋转 · 点击照片放大 · 一幕接一幕</p>
       </div>
 
       <aside class="act-rail" aria-label="展幕索引">
@@ -216,7 +215,8 @@
         <button type="button" data-orbit-action="toggle">
           <span class="mobile-orbit-bar__icon" data-orbit-icon>Ⅱ</span><span data-orbit-label>暂停</span>
         </button>
-        <button type="button" data-act-action="next">下一幕 <span aria-hidden="true">→</span></button>
+        <button type="button" data-act-action="prev" aria-label="上一幕"><span aria-hidden="true">←</span> 上一幕</button>
+        <button type="button" data-act-action="next" aria-label="下一幕">下一幕 <span aria-hidden="true">→</span></button>
       </div>
 
       <p class="sr-only" id="actAnnouncement" aria-live="polite"></p>
@@ -653,9 +653,10 @@
     <div class="noscript">星屿藏馆需要 JavaScript 才能点亮星树。请在浏览器中启用 JavaScript 后重新打开。</div>
   </noscript>
 
-  <script src="js/series.js?v=20261120a"></script>
-  <script src="js/collection-data.js?v=20261120a"></script>
-  <script src="js/tree-particles.js?v=20261120a"></script>
-  <script src="js/app.js?v=20261120a"></script>
+  <script src="js/series.js?v=20261120b"></script>
+  <script src="js/collection-data.js?v=20261120b"></script>
+  <script src="js/vendor/three.min.js?v=20261120b"></script>
+  <script src="js/tree-scene.js?v=20261120b"></script>
+  <script src="js/app.js?v=20261120b"></script>
 </body>
 </html>

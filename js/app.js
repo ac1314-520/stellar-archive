@@ -141,6 +141,7 @@ ${known}
     currentAct: 0,
     actItems: [],
     actsBuiltFor: "",
+    treeScene: null,
     orbit: {
       paused: false,
       angle: 0,
@@ -234,10 +235,7 @@ ${known}
 
     refreshDataViews();
     createStarDust();
-    if (window.StellarParticleTree && el.treeParticles) {
-      state.particleTree = new window.StellarParticleTree(el.treeParticles);
-      state.particleTree.setPaused(state.orbit.paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-    }
+    initTreeScene();
     updatePreloader(0, Math.max(1, state.actItems.length), "正在布置第一幕");
 
     const initialRoute = getInitialRoute();
@@ -255,12 +253,12 @@ ${known}
       }
     }, 14000);
 
-    startOrbitLoop();
-
     try {
       await Promise.all([
         preloadCurrentAct(),
-        document.fonts?.ready || Promise.resolve(),
+        // Fonts should not be allowed to hold the whole exhibition hostage;
+        // the fallback face is already usable.
+        Promise.race([document.fonts?.ready || Promise.resolve(), wait(1100)]),
         wait(450),
       ]);
     } catch (error) {
@@ -268,8 +266,7 @@ ${known}
     }
     hidePreloader(true);
     state.orbit.active = state.route === "tree";
-    state.particleTree?.setActive(state.route === "tree");
-    updateOrbitLayout();
+    state.treeScene?.setActive(state.route === "tree");
     if (!state.items.length) {
       showToast("还没有藏品。去识藏室放入第一张照片吧。");
     }
@@ -279,7 +276,7 @@ ${known}
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
       "topbar", "navCount", "treeView", "treeStage", "photoOrbit", "treeRing",
-      "treeSculpture", "treeShield", "treeParticles", "starDust",
+      "treeSculpture", "treeShield", "treeCanvas", "treeFallback", "treeParticles", "treePhotoList", "starDust",
       "heroCount", "heroSeriesCount", "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
       "actRailDots", "actRailCurrent", "actRailTotal", "actRailTitle",
       "actCounter", "actTitle", "mobileActCurrent", "mobileActTotal", "actAnnouncement",
@@ -347,7 +344,7 @@ ${known}
       }
     });
 
-    bindOrbitEvents();
+    bindOrbitUiEvents();
     bindAiDrawerEvents();
 
     el.seriesFilters.addEventListener("click", (event) => {
@@ -435,12 +432,11 @@ ${known}
     });
 
     window.addEventListener("resize", () => {
-      updateOrbitLayout();
+      state.treeScene?.resize();
       updateOrbitUI();
-      state.particleTree?.resize();
     });
     window.addEventListener("orientationchange", () => {
-      window.setTimeout(updateOrbitLayout, 250);
+      window.setTimeout(() => state.treeScene?.resize(), 250);
     });
 
     document.addEventListener("keydown", onGlobalKeydown);
@@ -509,15 +505,12 @@ ${known}
     if (target === "tree") {
       el.topbar.classList.remove("is-scrolled");
       state.orbit.active = true;
-      state.particleTree?.setPaused(state.orbit.paused);
-      state.particleTree?.setActive(true);
-      window.requestAnimationFrame(() => {
-        updateOrbitLayout();
-        updateOrbitFrame(performance.now());
-      });
+      state.treeScene?.setPaused(state.orbit.paused);
+      state.treeScene?.setActive(true);
+      window.requestAnimationFrame(() => state.treeScene?.resize());
     } else {
       state.orbit.active = false;
-      state.particleTree?.setActive(false);
+      state.treeScene?.setActive(false);
       updateTopbarState();
       if (target === "collection") {
         renderCollection();
@@ -584,6 +577,49 @@ ${known}
       fragment.appendChild(speck);
     }
     el.starDust.replaceChildren(fragment);
+  }
+
+  function initTreeScene() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      state.orbit.paused = true;
+    }
+    if (window.StellarTreeScene && el.treeCanvas) {
+      try {
+        state.treeScene = new window.StellarTreeScene(el.treeCanvas, {
+          onPhotoClick(item, origin) {
+            hidePhotoTip();
+            openViewer(item, origin, state.actItems);
+          },
+          onPhotoHover(item, x, y) {
+            if (item) showPhotoTipForItem(item, x, y);
+            else hidePhotoTip();
+          },
+        });
+        state.treeScene.setPaused(state.orbit.paused);
+        state.treeScene.setActive(state.route === "tree");
+      } catch (error) {
+        console.warn("3D tree unavailable:", error);
+        document.body.classList.add("tree-3d-failed");
+        if (el.treeFallback) el.treeFallback.hidden = false;
+        if (el.treeCanvas) el.treeCanvas.hidden = true;
+      }
+    } else if (el.treeFallback) {
+      document.body.classList.add("tree-3d-failed");
+      el.treeFallback.hidden = false;
+      if (el.treeCanvas) el.treeCanvas.hidden = true;
+    }
+    applyActImages();
+    updateOrbitUI();
+  }
+
+  function bindOrbitUiEvents() {
+    el.actRailDots?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-act-index]");
+      if (!button) return;
+      renderAct(Number(button.dataset.actIndex));
+    });
+    el.treeCanvas?.addEventListener("pointerleave", hidePhotoTip);
+    el.photoTip?.addEventListener("pointerleave", hidePhotoTip);
   }
 
   function buildActs() {
@@ -666,33 +702,34 @@ ${known}
   }
 
   function applyActImages() {
-    ensureOrbitCards();
     const act = state.acts[state.currentAct];
     state.actItems = act?.items || [];
-    state.orbit.cards.forEach((card, index) => {
-      const item = state.actItems[index];
-      if (!item) {
-        card.item = null;
-        card.el.hidden = true;
-        card.el.dataset.id = "";
-        return;
-      }
-      card.el.hidden = false;
-      card.item = item;
-      card.el.dataset.id = item.id;
-      card.el.setAttribute("aria-label", `欣赏 ${item.series} ${item.title}`);
-      const heroSrc = heroImageFor(item);
-      card.img.onerror = () => {
-        card.img.onerror = null;
-        if (heroSrc !== item.src) card.img.src = item.src;
-      };
-      card.img.src = heroSrc;
-      card.img.alt = `${item.series} ${item.title}`;
-      card.number.textContent = item.no;
-      card.series.textContent = item.series;
-      card.title.textContent = item.title;
-    });
+    const sceneItems = state.actItems.map((item) => ({
+      ...item,
+      image: heroImageFor(item),
+    }));
+    state.treeScene?.setItems(sceneItems);
+    updateTreePhotoList();
     updateActChrome();
+  }
+
+  function updateTreePhotoList() {
+    if (!el.treePhotoList) return;
+    el.treePhotoList.replaceChildren();
+    state.actItems.forEach((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `欣赏 ${item.series} ${item.title}`;
+      button.addEventListener("click", () => {
+        const stage = el.treeSculpture?.getBoundingClientRect();
+        openViewer(item, stage ? {
+          x: stage.left + stage.width / 2,
+          y: stage.top + stage.height / 2,
+          width: Math.max(80, stage.width * 0.2),
+        } : undefined, state.actItems);
+      });
+      el.treePhotoList.appendChild(button);
+    });
   }
 
   function preloadActImages(items = state.actItems, onProgress) {
@@ -771,7 +808,6 @@ ${known}
     state.orbit.transitioning = true;
     state.orbit.changeToken += 1;
     const token = state.orbit.changeToken;
-    el.photoOrbit.classList.add("is-changing");
     const previous = state.currentAct;
     state.currentAct = target;
     const items = state.acts[target]?.items || [];
@@ -786,9 +822,6 @@ ${known}
     if (!options.keepState) applyActImages();
     else state.actItems = items;
     if (progress < 1) updateActChrome();
-    // Let the new images settle for a frame before fading the orbit back in.
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    el.photoOrbit.classList.remove("is-changing");
     state.orbit.transitioning = false;
     updateActChrome();
     if (previous !== state.currentAct) {
@@ -822,7 +855,7 @@ ${known}
       }
     });
     if (el.treeRing) el.treeRing.style.animationPlayState = paused ? "paused" : "running";
-    state.particleTree?.setPaused(paused);
+    state.treeScene?.setPaused(paused);
   }
 
   function updateOrbitLayout() {
@@ -998,14 +1031,18 @@ ${known}
     updateOrbitUI();
   }
 
-  function showPhotoTipForCard(card, x, y) {
-    const item = state.actItems.find((candidate) => candidate.id === card.dataset.id);
+  function showPhotoTipForItem(item, x, y) {
     if (!item) return;
     el.photoTipNo.textContent = `NO. ${item.no}`;
     el.photoTipName.textContent = item.title;
     el.photoTipSeries.textContent = item.series;
     el.photoTip.classList.add("is-visible");
     positionPhotoTip(x, y);
+  }
+
+  function showPhotoTipForCard(card, x, y) {
+    const item = state.actItems.find((candidate) => candidate.id === card.dataset.id);
+    showPhotoTipForItem(item, x, y);
   }
 
   function positionPhotoTip(x, y) {
@@ -1340,14 +1377,12 @@ ${known}
     state.filteredItems = state.items.slice();
     pruneFavourites();
     buildActs();
-    ensureOrbitCards();
     applyActImages();
     updateCounts();
     renderFilters();
     renderAtelierSeriesList();
     renderCollection();
     renderAtelierLog();
-    window.requestAnimationFrame(updateOrbitLayout);
   }
 
   function seriesCounts() {
@@ -1641,7 +1676,7 @@ ${known}
     el.viewer.setAttribute("aria-hidden", "false");
     document.body.classList.add("viewer-open");
     state.orbit.active = false;
-    state.particleTree?.setActive(false);
+    state.treeScene?.setActive(false);
 
     renderViewerItem(index, { resetRotation: true });
     animateViewerEntry(origin);
@@ -1873,8 +1908,8 @@ ${known}
     if (state.route === "tree") {
       state.orbit.active = true;
       state.orbit.lastTime = performance.now();
-      state.particleTree?.setPaused(state.orbit.paused);
-      state.particleTree?.setActive(true);
+      state.treeScene?.setPaused(state.orbit.paused);
+      state.treeScene?.setActive(true);
     }
   }
 

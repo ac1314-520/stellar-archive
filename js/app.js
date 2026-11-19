@@ -17,22 +17,107 @@
   const DB_NAME = "stellar-archive-v1";
   const DB_STORE = "plates";
   const FAV_KEY = "stellar-archive:favourites:v1";
-  const MAX_TREE_PLATES = 200;
+  const AI_CONFIG_KEY = "stellar-archive:ai-config:v1";
+  const AI_SESSION_KEY = "stellar-archive:ai-session:v1";
   const MAX_UPLOAD_BATCH = 30;
+  const ACT_SIZE = 25;
+  const ACT_TITLES = [
+    "雪落之前",
+    "松间来信",
+    "金色回声",
+    "月下漫游",
+    "冬青愿望",
+    "暖灯小聚",
+    "星屑入梦",
+    "长夜晚安",
+  ];
+
+  const AI_PROMPT = `你是泡泡玛特潮玩藏品的视觉鉴定师。请仔细看这张照片，识别其中的角色与系列。
+
+只能从下面 10 个系列中选择：
+MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIMOMO
+如果照片中没有可辨认的泡泡玛特角色，series 返回 "UNKNOWN"。
+
+请只返回一个 JSON 对象，不要 Markdown、不要解释：
+{
+  "series": "上述系列之一或 UNKNOWN",
+  "character": "角色/款式名，不确定可填空字符串",
+  "title": "2 到 6 个中文字的圣诞或冬夜主题藏品名，不要照抄系列名",
+  "confidence": 0.0 到 1.0 之间的数字,
+  "reason": "一句话说明依据，20 字以内"
+}`;
+
+  const AI_PRESETS = {
+    local: {
+      label: "本地轻量识别",
+      base: "",
+      model: "",
+      hint: "按文件名、主色与画面特征归类，不联网。",
+    },
+    doubao: {
+      label: "豆包 Seed Vision",
+      base: "https://ark.cn-beijing.volces.com/api/v3",
+      model: "doubao-seed-2-0-lite-260215",
+      hint: "火山方舟提供的豆包视觉模型，需在控制台开通并复制模型/接入点 ID。",
+    },
+    siliconflow: {
+      label: "硅基流动",
+      base: "https://api.siliconflow.cn/v1",
+      model: "Qwen/Qwen2.5-VL-32B-Instruct",
+      hint: "OpenAI 兼容接口，可选择平台提供免费额度的视觉模型。",
+    },
+    openrouter: {
+      label: "OpenRouter",
+      base: "https://openrouter.ai/api/v1",
+      model: "qwen/qwen2.5-vl-32b-instruct:free",
+      hint: "OpenRouter 上有可用的免费视觉模型，具体可用性以模型列表为准。",
+    },
+    custom: {
+      label: "自定义视觉 API",
+      base: "",
+      model: "",
+      hint: "任何兼容 OpenAI Chat Completions 的视觉模型接口。",
+    },
+  };
 
   const state = {
     route: null,
     demo: [],
     customItems: [],
     items: [],
-    treeItems: [],
     filteredItems: [],
-    tree: null,
-    treeReady: false,
-    treeBuilding: false,
-    treeDirty: false,
-    treeFocus: null,
-    treePaused: false,
+    acts: [],
+    currentAct: 0,
+    actItems: [],
+    actsBuiltFor: "",
+    orbit: {
+      paused: false,
+      angle: 0,
+      offset: 0,
+      targetOffset: 0,
+      lastTime: 0,
+      raf: 0,
+      active: false,
+      dragging: false,
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      startOffset: 0,
+      moved: false,
+      suppressClick: false,
+      layout: null,
+      cards: [],
+      changeToken: 0,
+      prefetchedActs: new Set(),
+    },
+    ai: {
+      provider: "local",
+      base: "",
+      model: "",
+      key: "",
+      remember: false,
+      configured: false,
+    },
     filters: { series: "all", rarity: "all", favourite: false },
     query: "",
     sort: "number",
@@ -80,6 +165,7 @@
     cacheElements();
     bindStaticEvents();
     loadFavourites();
+    loadAiSettings();
 
     state.demo = Array.isArray(window.STELLAR_DATA) ? window.STELLAR_DATA.slice() : [];
 
@@ -89,48 +175,53 @@
       console.warn("Could not read local archive:", error);
     }
 
-    state.treeItems = chooseTreeItems();
     refreshDataViews();
-    updatePreloader(0, Math.max(1, state.treeItems.length), "正在整理星枝");
+    createStarDust();
+    updatePreloader(0, Math.max(1, state.actItems.length), "正在布置第一幕");
 
     const initialRoute = getInitialRoute();
     navigate(initialRoute, { push: false, initial: true });
 
-    // A deep link into the collection should not make the visitor wait behind
-    // the tree's curtain. The tree can finish dressing itself in the background.
+    // A deep link into a room should not wait for the salon's photographs.
     if (initialRoute !== "tree") {
-      window.setTimeout(() => hidePreloader(), 750);
+      window.setTimeout(() => hidePreloader(), 850);
     }
 
     window.setTimeout(() => {
       if (!state.preloaderHidden) {
         hidePreloader();
-        showToast("星树点灯时间有点久，可以先逛逛藏品馆。");
+        showToast("照片还在布展，可以先逛藏品馆。");
       }
-    }, 18000);
+    }, 14000);
 
-    if (!window.THREE) {
-      showTreeFallback("当前浏览器无法启用 3D 星树，但藏品馆依然可以进入。");
-      hidePreloader();
-      return;
+    startOrbitLoop();
+
+    try {
+      await Promise.all([
+        preloadCurrentAct(),
+        preloadTreeImage(),
+        document.fonts?.ready || Promise.resolve(),
+        wait(450),
+      ]);
+    } catch (error) {
+      console.warn("First act preload:", error);
     }
-
-    if (!state.treeItems.length) {
-      showTreeFallback("还没有可展示的藏品。去识藏室放入第一张照片吧。");
-      hidePreloader();
-      return;
+    hidePreloader(true);
+    state.orbit.active = state.route === "tree";
+    updateOrbitLayout();
+    if (!state.items.length) {
+      showToast("还没有藏品。去识藏室放入第一张照片吧。");
     }
-
-    await initTreeScene();
   }
 
   function cacheElements() {
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
-      "topbar", "navCount", "treeView", "treeCanvas", "treeFallback",
-      "heroCount", "heroSeriesCount", "treeSeriesList", "clearTreeFocus",
-      "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
-      "orbitToggle", "orbitIcon", "resetView", "zoomIn", "zoomOut",
+      "topbar", "navCount", "treeView", "treeStage", "photoOrbit", "treeRing",
+      "treeSculpture", "treeShield", "starDust",
+      "heroCount", "heroSeriesCount", "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
+      "actRailDots", "actRailCurrent", "actRailTotal", "actRailTitle",
+      "actCounter", "actTitle", "mobileActCurrent", "mobileActTotal", "actAnnouncement",
       "collectionView", "collectionGrid", "emptyState", "emptyReset",
       "resultCount", "collectionCount", "collectionSeries", "collectionRare",
       "seriesFilters", "rarityFilters", "filterFavourite", "favCount",
@@ -139,7 +230,10 @@
       "scanPanel", "scanGrid", "scanBar", "scanProgressLabel", "scanCaption",
       "identifyResults", "resultGrid", "clearResults", "confirmImport", "importCount",
       "atelierLog", "atelierLogEmpty", "atelierLogStrip", "customPhotoCount", "clearCustomBtn",
-      "atelierSeriesList",
+      "atelierSeriesList", "openAiSettings", "aiStatusText",
+      "aiDrawer", "aiDrawerVeil", "aiDrawerClose", "aiForm", "aiProvider", "aiFields",
+      "aiKey", "aiKeyToggle", "aiBase", "aiModel", "aiRemember", "aiProviderLinks",
+      "aiSave", "aiDisable", "aiFormStatus",
       "viewer", "viewerBackdrop", "viewerClose", "viewerNo", "viewerTitle",
       "viewerTitleEn", "viewerSeries", "viewerRarity", "viewerStory",
       "viewerCollection", "viewerId", "viewerDate", "viewerConfidence",
@@ -162,6 +256,9 @@
     el.scrollViews = [el.collectionView, el.atelierView];
     el.viewer.inert = true;
     el.viewer.setAttribute("inert", "");
+    el.aiDrawer.inert = true;
+    el.aiDrawer.setAttribute("inert", "");
+    el.treeImage = $("#treeSculpture img");
   }
 
   function bindStaticEvents() {
@@ -178,37 +275,20 @@
       }
     });
 
-    el.orbitToggle.addEventListener("click", () => {
-      state.treePaused = !state.treePaused;
-      state.tree?.setPaused(state.treePaused);
-      updateOrbitButton();
+    document.addEventListener("click", (event) => {
+      const orbitAction = event.target.closest("[data-orbit-action]");
+      if (orbitAction) {
+        if (orbitAction.dataset.orbitAction === "toggle") toggleOrbit();
+        return;
+      }
+      const actAction = event.target.closest("[data-act-action]");
+      if (actAction) {
+        shiftAct(actAction.dataset.actAction === "prev" ? -1 : 1);
+      }
     });
 
-    el.resetView.addEventListener("click", () => {
-      state.tree?.resetView();
-      state.treeFocus = null;
-      state.tree?.setFocus(null);
-      updateTreeFocusUI();
-      showToast("已回到最初的观看位置。");
-    });
-
-    el.zoomIn.addEventListener("click", () => state.tree?.zoomIn());
-    el.zoomOut.addEventListener("click", () => state.tree?.zoomOut());
-
-    el.treeSeriesList.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-tree-series]");
-      if (!button) return;
-      const key = button.dataset.treeSeries;
-      state.treeFocus = state.treeFocus === key ? null : key;
-      state.tree?.setFocus(state.treeFocus);
-      updateTreeFocusUI();
-    });
-
-    el.clearTreeFocus.addEventListener("click", () => {
-      state.treeFocus = null;
-      state.tree?.setFocus(null);
-      updateTreeFocusUI();
-    });
+    bindOrbitEvents();
+    bindAiDrawerEvents();
 
     el.seriesFilters.addEventListener("click", (event) => {
       const button = event.target.closest("[data-series-filter]");
@@ -294,6 +374,14 @@
       view.addEventListener("scroll", updateTopbarState, { passive: true });
     });
 
+    window.addEventListener("resize", () => {
+      updateOrbitLayout();
+      updateOrbitUI();
+    });
+    window.addEventListener("orientationchange", () => {
+      window.setTimeout(updateOrbitLayout, 250);
+    });
+
     document.addEventListener("keydown", onGlobalKeydown);
     bindViewerEvents();
     bindAtelierEvents();
@@ -359,10 +447,13 @@
 
     if (target === "tree") {
       el.topbar.classList.remove("is-scrolled");
-      if (state.tree && state.treeReady) state.tree.setActive(true);
-      if (state.treeDirty && !state.treeBuilding) rebuildTreeScene();
+      state.orbit.active = true;
+      window.requestAnimationFrame(() => {
+        updateOrbitLayout();
+        updateOrbitFrame(performance.now());
+      });
     } else {
-      state.tree?.setActive(false);
+      state.orbit.active = false;
       updateTopbarState();
       if (target === "collection") {
         renderCollection();
@@ -381,80 +472,6 @@
     }
   }
 
-  async function initTreeScene() {
-    if (state.treeBuilding) return;
-    state.treeBuilding = true;
-    state.treeDirty = false;
-    try {
-      const tree = new window.StellarTree(el.treeCanvas, {
-        onProgress: (loaded, total, status) => {
-          updatePreloader(loaded, total, status);
-        },
-        onHover: handleTreeHover,
-        onSelect: (item, point) => {
-          if (!item) return;
-          openViewer(item, { x: point.x, y: point.y, width: 130 }, state.treeItems);
-        },
-        onReset: () => updateTreeFocusUI(),
-        onError: (message) => {
-          showTreeFallback(message || "星树暂时无法点亮，客厅的灯还亮着。");
-          hidePreloader();
-        },
-      });
-      state.tree = tree;
-      await tree.load(state.treeItems);
-      if (!tree.ready) {
-        showTreeFallback("照片没有顺利挂上星树，请刷新页面重试。");
-        hidePreloader();
-        return;
-      }
-      state.treeReady = true;
-      state.treeDirty = false;
-      state.treePaused = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      tree.setPaused(state.treePaused);
-      if (state.treeFocus) tree.setFocus(state.treeFocus);
-      updateOrbitButton();
-      hidePreloader(true);
-      if (state.route === "tree") tree.setActive(true);
-    } catch (error) {
-      console.error("Tree initialisation failed:", error);
-      showTreeFallback("当前浏览器无法启用 3D 星树，但藏品馆依然可以进入。");
-      hidePreloader();
-    } finally {
-      state.treeBuilding = false;
-    }
-  }
-
-  async function rebuildTreeScene() {
-    if (state.treeBuilding || !state.tree) return;
-    state.treeItems = chooseTreeItems();
-    state.treeBuilding = true;
-    state.treeDirty = false;
-    state.tree.setActive(false);
-    showToast("藏品有更新，正在重新点亮星树…");
-    try {
-      await state.tree.load(state.treeItems);
-      if (!state.tree.ready) {
-        showTreeFallback("照片没有顺利挂上星树，请刷新页面重试。");
-        return;
-      }
-      state.treeReady = true;
-      if (state.treeFocus) state.tree.setFocus(state.treeFocus);
-      if (state.route === "tree") state.tree.setActive(true);
-    } catch (error) {
-      console.error(error);
-      showTreeFallback("星树暂时无法点亮，请稍后再试。");
-    } finally {
-      state.treeBuilding = false;
-    }
-  }
-
-  function showTreeFallback(message) {
-    el.treeFallback.hidden = false;
-    const p = $("p", el.treeFallback);
-    if (p && message) p.textContent = message;
-  }
-
   function updatePreloader(loaded, total, status) {
     const safeTotal = Math.max(1, total || 1);
     const percent = Math.min(100, Math.round((loaded / safeTotal) * 100));
@@ -469,7 +486,7 @@
     state.preloaderHidden = true;
     if (el.loadPercent) el.loadPercent.textContent = "100";
     if (el.loadBar) el.loadBar.style.width = "100%";
-    if (el.loadStatus) el.loadStatus.textContent = "星树已经点亮";
+    if (el.loadStatus) el.loadStatus.textContent = "第一幕布展完成";
     document.body.classList.add("is-ready");
     window.setTimeout(() => {
       if (el.loadBar) el.loadBar.style.width = "100%";
@@ -479,6 +496,493 @@
         if (!afterReady) el.preloader.style.display = "none";
       }, 1200);
     }, 280);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     the salon · eight acts, a crisp photograph orbit
+     ══════════════════════════════════════════════════════════════════════ */
+
+  function createStarDust() {
+    if (!el.starDust) return;
+    const count = window.matchMedia("(max-width: 760px)").matches ? 18 : 34;
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < count; i += 1) {
+      const speck = document.createElement("i");
+      const size = Math.random() < 0.2 ? 3 : 1 + Math.random() * 1.6;
+      speck.style.left = `${Math.random() * 100}%`;
+      speck.style.top = `${30 + Math.random() * 64}%`;
+      speck.style.width = `${size}px`;
+      speck.style.height = `${size}px`;
+      speck.style.setProperty("--dust-duration", `${11 + Math.random() * 17}s`);
+      speck.style.setProperty("--dust-delay", `${-Math.random() * 24}s`);
+      speck.style.setProperty("--dust-opacity", `${0.12 + Math.random() * 0.3}`);
+      speck.style.setProperty("--dust-x", `${(Math.random() - 0.5) * 70}px`);
+      fragment.appendChild(speck);
+    }
+    el.starDust.replaceChildren(fragment);
+  }
+
+  function buildActs() {
+    const ordered = shuffle(state.items.slice());
+    const acts = [];
+    for (let i = 0; i < ordered.length; i += ACT_SIZE) {
+      acts.push({
+        title: ACT_TITLES[acts.length] || `第 ${acts.length + 1} 幕`,
+        items: ordered.slice(i, i + ACT_SIZE),
+      });
+    }
+    state.acts = acts;
+    state.currentAct = clamp(state.currentAct, 0, Math.max(0, acts.length - 1));
+    state.actItems = acts[state.currentAct]?.items || [];
+    state.actsBuiltFor = state.items.map((item) => item.id).join("|");
+  }
+
+  function ensureOrbitCards() {
+    if (state.orbit.cards.length && el.photoOrbit.children.length === state.orbit.cards.length) {
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    const cards = [];
+    for (let i = 0; i < ACT_SIZE; i += 1) {
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.className = "orbit-card";
+      slot.dataset.slot = String(i);
+      slot.style.opacity = "0";
+      slot.innerHTML = `
+        <span class="orbit-card__inner">
+          <span class="orbit-card__media">
+            <img alt="" draggable="false" decoding="async">
+            <span class="orbit-card__number"></span>
+            <span class="orbit-card__caption">
+              <span class="orbit-card__series"></span>
+              <span class="orbit-card__title"></span>
+            </span>
+          </span>
+        </span>`;
+      fragment.appendChild(slot);
+      cards.push({
+        el: slot,
+        img: $("img", slot),
+        number: $(".orbit-card__number", slot),
+        series: $(".orbit-card__series", slot),
+        title: $(".orbit-card__title", slot),
+        baseAngle: (i / ACT_SIZE) * Math.PI * 2 + (Math.random() - 0.5) * 0.08,
+        phase: Math.random() * Math.PI * 2,
+        item: null,
+      });
+    }
+    el.photoOrbit.replaceChildren(fragment);
+    state.orbit.cards = cards;
+  }
+
+  function updateActChrome() {
+    const total = Math.max(1, state.acts.length);
+    const actNumber = String(state.currentAct + 1).padStart(2, "0");
+    const totalNumber = String(total).padStart(2, "0");
+    const title = state.acts[state.currentAct]?.title || "雪落之前";
+    if (el.actRailCurrent) el.actRailCurrent.textContent = actNumber;
+    if (el.actRailTotal) el.actRailTotal.textContent = totalNumber;
+    if (el.actRailTitle) el.actRailTitle.textContent = title;
+    if (el.actCounter) el.actCounter.textContent = actNumber;
+    if (el.actTitle) el.actTitle.textContent = title;
+    if (el.mobileActCurrent) el.mobileActCurrent.textContent = actNumber;
+    if (el.mobileActTotal) el.mobileActTotal.textContent = totalNumber;
+    const dockTotal = $("#actDockTotal");
+    if (dockTotal) dockTotal.textContent = `/ ${totalNumber} 幕`;
+    if (el.actRailDots) {
+      const dots = state.acts.map((act, index) => `
+        <button class="act-rail__dot${index === state.currentAct ? " is-active" : ""}" type="button" data-act-index="${index}" aria-label="查看第 ${index + 1} 幕：${escapeHTML(act.title)}" aria-pressed="${index === state.currentAct}"></button>
+      `).join("");
+      el.actRailDots.innerHTML = dots;
+    }
+    if (el.actAnnouncement) {
+      el.actAnnouncement.textContent = `第 ${state.currentAct + 1} 幕，${title}，${state.actItems.length} 件藏品`;
+    }
+  }
+
+  function applyActImages() {
+    ensureOrbitCards();
+    const act = state.acts[state.currentAct];
+    state.actItems = act?.items || [];
+    state.orbit.cards.forEach((card, index) => {
+      const item = state.actItems[index];
+      if (!item) {
+        card.item = null;
+        card.el.hidden = true;
+        card.el.dataset.id = "";
+        return;
+      }
+      card.el.hidden = false;
+      card.item = item;
+      card.el.dataset.id = item.id;
+      card.el.setAttribute("aria-label", `欣赏 ${item.series} ${item.title}`);
+      const heroSrc = heroImageFor(item);
+      card.img.onerror = () => {
+        card.img.onerror = null;
+        if (heroSrc !== item.src) card.img.src = item.src;
+      };
+      card.img.src = heroSrc;
+      card.img.alt = `${item.series} ${item.title}`;
+      card.number.textContent = item.no;
+      card.series.textContent = item.series;
+      card.title.textContent = item.title;
+    });
+    updateActChrome();
+  }
+
+  function preloadActImages(items = state.actItems, onProgress) {
+    return new Promise((resolve) => {
+      if (!items.length) {
+        onProgress?.(0, 0);
+        resolve();
+        return;
+      }
+      let done = 0;
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const timer = window.setTimeout(finish, 12000);
+      items.forEach((item) => {
+        const image = new Image();
+        const mark = () => {
+          done += 1;
+          onProgress?.(done, items.length);
+          if (done >= items.length) {
+            window.clearTimeout(timer);
+            finish();
+          }
+        };
+        image.onload = mark;
+        image.onerror = () => {
+          if (heroImageFor(item) !== item.src && image.src !== item.src) {
+            image.onload = mark;
+            image.onerror = mark;
+            image.src = item.src;
+            return;
+          }
+          mark();
+        };
+        image.src = heroImageFor(item);
+      });
+    });
+  }
+
+  async function preloadCurrentAct() {
+    const total = state.actItems.length;
+    if (!total) return;
+    updatePreloader(0, total, "正在布置第一幕");
+    await preloadActImages(state.actItems, (loaded, count) => {
+      updatePreloader(loaded, count, loaded >= count ? "第一幕布展完成" : "正在挂上藏品");
+    });
+  }
+
+  function heroImageFor(item) {
+    if (!item) return "";
+    if (item.sample && /^\d{3}$/.test(item.no)) {
+      return `assets/photos/card/${item.no}.webp`;
+    }
+    return item.src;
+  }
+
+  function gridImageFor(item) {
+    if (!item) return "";
+    if (item.sample && /^\d{3}$/.test(item.no)) {
+      return `assets/photos/card/${item.no}.webp`;
+    }
+    return item.thumb || item.src || "";
+  }
+
+  function preloadTreeImage() {
+    return new Promise((resolve) => {
+      const image = el.treeImage;
+      if (!image) {
+        resolve();
+        return;
+      }
+      if (image.complete) {
+        resolve();
+        return;
+      }
+      const finish = () => resolve();
+      image.addEventListener("load", finish, { once: true });
+      image.addEventListener("error", finish, { once: true });
+      window.setTimeout(finish, 6000);
+    });
+  }
+
+  async function renderAct(index, options = {}) {
+    if (!state.acts.length) return;
+    const target = ((index % state.acts.length) + state.acts.length) % state.acts.length;
+    if (target === state.currentAct && options.initial) {
+      applyActImages();
+      return;
+    }
+    if (state.orbit.transitioning) return;
+    state.orbit.transitioning = true;
+    state.orbit.changeToken += 1;
+    const token = state.orbit.changeToken;
+    el.photoOrbit.classList.add("is-changing");
+    const previous = state.currentAct;
+    state.currentAct = target;
+    const items = state.acts[target]?.items || [];
+    let progress = 0;
+    try {
+      await preloadActImages(items, (loaded, total) => {
+        progress = total ? loaded / total : 1;
+        if (loaded === total) updateActChrome();
+      });
+    } catch {}
+    if (token !== state.orbit.changeToken) return;
+    if (!options.keepState) applyActImages();
+    else state.actItems = items;
+    if (progress < 1) updateActChrome();
+    // Let the new images settle for a frame before fading the orbit back in.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    el.photoOrbit.classList.remove("is-changing");
+    state.orbit.transitioning = false;
+    updateActChrome();
+    if (previous !== state.currentAct) {
+      el.srLive.textContent = `第 ${state.currentAct + 1} 幕，${state.acts[state.currentAct].title}`;
+    }
+  }
+
+  function shiftAct(direction) {
+    if (!state.acts.length || state.orbit.transitioning) return;
+    renderAct(state.currentAct + direction);
+  }
+
+  function toggleOrbit() {
+    state.orbit.paused = !state.orbit.paused;
+    updateOrbitUI();
+  }
+
+  function updateOrbitUI() {
+    const paused = state.orbit.paused;
+    $$("[data-orbit-label]").forEach((label) => {
+      label.textContent = paused ? "继续环游" : "暂停环游";
+    });
+    $$("[data-orbit-icon]").forEach((icon) => {
+      icon.textContent = paused ? "▶" : "Ⅱ";
+    });
+    $$("[data-orbit-action='toggle']").forEach((button) => {
+      button.setAttribute("aria-pressed", paused ? "true" : "false");
+      const mobileLabel = $("[data-orbit-label]", button);
+      if (mobileLabel && window.matchMedia("(max-width: 760px)").matches) {
+        mobileLabel.textContent = paused ? "继续" : "暂停";
+      }
+    });
+    if (el.treeRing) el.treeRing.style.animationPlayState = paused ? "paused" : "running";
+  }
+
+  function updateOrbitLayout() {
+    if (!el.treeStage || !el.treeSculpture) return;
+    const stage = el.treeStage.getBoundingClientRect();
+    const tree = el.treeSculpture.getBoundingClientRect();
+    if (!stage.width || !tree.width) return;
+    const mobile = stage.width <= 760;
+    const compact = stage.width < 1180;
+    const cx = tree.left - stage.left + tree.width / 2;
+    const cy = tree.top - stage.top + tree.height * 0.53;
+    const radiusX = mobile
+      ? Math.min(stage.width * 0.43, tree.width * 0.9)
+      : compact
+        ? Math.min(stage.width * 0.36, tree.width * 0.9)
+        : Math.min(stage.width * 0.34, tree.width * 0.92);
+    const radiusY = mobile
+      ? Math.min(stage.height * 0.19, tree.height * 0.4)
+      : compact
+        ? Math.min(stage.height * 0.25, tree.height * 0.4)
+        : Math.min(stage.height * 0.29, tree.height * 0.42);
+    state.orbit.layout = {
+      cx,
+      cy,
+      radiusX,
+      radiusY,
+      width: stage.width,
+      height: stage.height,
+      treeW: tree.width,
+      treeH: tree.height,
+      mobile,
+    };
+    if (el.treeShield) {
+      const shieldWidth = tree.width * 0.74;
+      const shieldHeight = tree.height * 0.9;
+      el.treeShield.style.left = `${tree.left - stage.left + (tree.width - shieldWidth) / 2}px`;
+      el.treeShield.style.top = `${tree.top - stage.top + tree.height * 0.04}px`;
+      el.treeShield.style.width = `${shieldWidth}px`;
+      el.treeShield.style.height = `${shieldHeight}px`;
+    }
+    updateOrbitFrame(performance.now());
+  }
+
+  function updateOrbitFrame(now) {
+    if (!state.orbit.layout || !state.orbit.cards.length) return;
+    if (!state.orbit.active) return;
+    const layout = state.orbit.layout;
+    if (!state.orbit.lastTime) state.orbit.lastTime = now;
+    const dt = Math.min(0.05, Math.max(0, (now - state.orbit.lastTime) / 1000));
+    state.orbit.lastTime = now;
+    if (!state.orbit.paused && !state.orbit.dragging) {
+      state.orbit.angle += dt * 0.095;
+    }
+    state.orbit.offset += (state.orbit.targetOffset - state.orbit.offset) * 0.075;
+    const totalAngle = state.orbit.angle + state.orbit.offset;
+    state.orbit.cards.forEach((card) => {
+      if (card.el.hidden) return;
+      const angle = card.baseAngle + totalAngle;
+      const sin = Math.sin(angle);
+      const cos = Math.cos(angle);
+      const x = layout.cx + cos * layout.radiusX;
+      const y = layout.cy + sin * layout.radiusY;
+      const depth = (sin + 1) / 2;
+      const scale = 0.7 + depth * 0.4;
+      // Cards that drift behind the tree silhouette fade away instead of
+      // turning into a stack of ghost rectangles. Everything remains in the
+      // same orbit and comes back into the light on the other side.
+      const treeTop = layout.cy - layout.treeH * 0.46;
+      const vertical = clamp((y - treeTop) / layout.treeH, 0, 1);
+      const treeHalf = layout.treeW * (0.055 + 0.39 * vertical);
+      const edgeDistance = Math.abs(x - layout.cx);
+      const visibility = clamp((edgeDistance - treeHalf * 0.72) / (layout.treeW * 0.12), 0, 1);
+      const opacity = (0.38 + depth * 0.62) * visibility;
+      card.el.style.opacity = opacity.toFixed(3);
+      card.el.style.pointerEvents = visibility < 0.32 ? "none" : "auto";
+      card.el.style.zIndex = String(20 + Math.round(depth * 30));
+      card.el.style.transform = `translate3d(calc(${x.toFixed(2)}px - 50%), calc(${y.toFixed(2)}px - 50%), 0) scale(${scale.toFixed(3)}) rotate(${(cos * 1.8).toFixed(2)}deg)`;
+    });
+  }
+
+  function startOrbitLoop() {
+    if (state.orbit.raf) return;
+    const tick = (now) => {
+      state.orbit.raf = requestAnimationFrame(tick);
+      if (!state.orbit.active) return;
+      if (document.hidden) return;
+      updateOrbitFrame(now);
+    };
+    state.orbit.raf = requestAnimationFrame(tick);
+  }
+
+  function bindOrbitEvents() {
+    const stage = el.treeStage;
+    if (!stage) return;
+
+    stage.addEventListener("pointerdown", (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (event.target.closest("[data-orbit-ui]")) return;
+      state.orbit.dragging = true;
+      state.orbit.moved = false;
+      state.orbit.pointerId = event.pointerId;
+      state.orbit.startX = event.clientX;
+      state.orbit.startY = event.clientY;
+      state.orbit.startOffset = state.orbit.targetOffset;
+      state.orbit.suppressClick = false;
+      stage.classList.add("is-dragging");
+    });
+
+    stage.addEventListener("pointermove", (event) => {
+      if (!state.orbit.dragging || event.pointerId !== state.orbit.pointerId) return;
+      const dx = event.clientX - state.orbit.startX;
+      const dy = event.clientY - state.orbit.startY;
+      if (!state.orbit.moved && Math.abs(dx) + Math.abs(dy) > 6) {
+        state.orbit.moved = true;
+        try { stage.setPointerCapture(event.pointerId); } catch {}
+      }
+      if (!state.orbit.moved) return;
+      event.preventDefault();
+      state.orbit.targetOffset = state.orbit.startOffset + dx * 0.0054;
+      state.orbit.angle += dx * 0.00008;
+      state.orbit.suppressClick = true;
+      updateOrbitFrame(performance.now());
+    });
+
+    const endDrag = (event) => {
+      if (!state.orbit.dragging) return;
+      state.orbit.dragging = false;
+      state.orbit.pointerId = null;
+      stage.classList.remove("is-dragging");
+      try { stage.releasePointerCapture?.(event.pointerId); } catch {}
+      if (state.orbit.moved) {
+        window.setTimeout(() => {
+          state.orbit.suppressClick = false;
+        }, 120);
+      }
+    };
+    stage.addEventListener("pointerup", endDrag);
+    stage.addEventListener("pointercancel", endDrag);
+    stage.addEventListener("pointerleave", (event) => {
+      if (state.orbit.dragging && event.buttons === 0) endDrag(event);
+    });
+
+    el.photoOrbit.addEventListener("click", (event) => {
+      if (state.orbit.suppressClick) {
+        event.preventDefault();
+        return;
+      }
+      const card = event.target.closest(".orbit-card");
+      if (!card || !card.dataset.id) return;
+      const item = state.actItems.find((candidate) => candidate.id === card.dataset.id);
+      if (!item) return;
+      const rect = card.getBoundingClientRect();
+      hidePhotoTip();
+      openViewer(item, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width }, state.actItems);
+    });
+
+    el.photoOrbit.addEventListener("pointerover", (event) => {
+      if (event.pointerType === "touch") return;
+      const card = event.target.closest(".orbit-card");
+      if (card) showPhotoTipForCard(card, event.clientX, event.clientY);
+    });
+    el.photoOrbit.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch") return;
+      if (event.target.closest(".orbit-card")) {
+        positionPhotoTip(event.clientX, event.clientY);
+      }
+    });
+    el.photoOrbit.addEventListener("pointerout", (event) => {
+      const card = event.target.closest(".orbit-card");
+      if (!card) return;
+      const next = event.relatedTarget?.closest?.(".orbit-card");
+      if (next !== card) hidePhotoTip();
+    });
+
+    el.actRailDots?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-act-index]");
+      if (!button) return;
+      renderAct(Number(button.dataset.actIndex));
+    });
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      state.orbit.paused = true;
+    }
+    updateOrbitUI();
+  }
+
+  function showPhotoTipForCard(card, x, y) {
+    const item = state.actItems.find((candidate) => candidate.id === card.dataset.id);
+    if (!item) return;
+    el.photoTipNo.textContent = `NO. ${item.no}`;
+    el.photoTipName.textContent = item.title;
+    el.photoTipSeries.textContent = item.series;
+    el.photoTip.classList.add("is-visible");
+    positionPhotoTip(x, y);
+  }
+
+  function positionPhotoTip(x, y) {
+    const width = el.photoTip.offsetWidth || 230;
+    const height = el.photoTip.offsetHeight || 32;
+    const left = Math.min(window.innerWidth - width - 14, Math.max(12, x + 18));
+    const top = Math.min(window.innerHeight - height - 14, Math.max(12, y + 18));
+    el.photoTip.style.left = `${left}px`;
+    el.photoTip.style.top = `${top}px`;
+  }
+
+  function hidePhotoTip() {
+    el.photoTip.classList.remove("is-visible");
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -591,14 +1095,6 @@
     };
   }
 
-  function chooseTreeItems() {
-    const custom = state.customItems.slice(0, MAX_TREE_PLATES);
-    if (custom.length >= MAX_TREE_PLATES) return shuffle(custom.slice(0, MAX_TREE_PLATES));
-    const need = MAX_TREE_PLATES - custom.length;
-    const demoPart = state.demo.slice(0, need);
-    return shuffle(custom.concat(demoPart));
-  }
-
   function shuffle(items) {
     const result = items.slice();
     let seed = 0x51f15e;
@@ -649,14 +1145,15 @@
     state.items = state.customItems.concat(state.demo);
     state.filteredItems = state.items.slice();
     pruneFavourites();
-    state.treeItems = chooseTreeItems();
+    buildActs();
+    ensureOrbitCards();
+    applyActImages();
     updateCounts();
-    renderTreeSeriesRail();
     renderFilters();
     renderAtelierSeriesList();
     renderCollection();
     renderAtelierLog();
-    updateTreeFocusUI();
+    window.requestAnimationFrame(updateOrbitLayout);
   }
 
   function seriesCounts() {
@@ -681,30 +1178,6 @@
     el.collectionRare.textContent = rare;
     el.resultCount.textContent = state.filteredItems.length;
     el.favCount.textContent = state.favourites.size;
-  }
-
-  function renderTreeSeriesRail() {
-    const counts = seriesCounts();
-    el.treeSeriesList.innerHTML = SERIES_ORDER.map((key) => {
-      const meta = SERIES[key];
-      return `
-        <button class="series-item" type="button" data-tree-series="${key}" style="--accent:${meta.accent}" aria-pressed="false">
-          <span class="series-item__dot" aria-hidden="true"></span>
-          <span class="series-item__name">${escapeHTML(meta.name)}</span>
-          <span class="series-item__cn">${escapeHTML(meta.cn)}</span>
-          <span class="series-item__count">${counts[key] || 0}</span>
-        </button>`;
-    }).join("");
-    updateTreeFocusUI();
-  }
-
-  function updateTreeFocusUI() {
-    $$("[data-tree-series]", el.treeSeriesList).forEach((button) => {
-      const active = button.dataset.treeSeries === state.treeFocus;
-      button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", active ? "true" : "false");
-    });
-    el.clearTreeFocus.hidden = !state.treeFocus;
   }
 
   function renderFilters() {
@@ -844,7 +1317,7 @@
           <button class="plate__open" type="button" data-open-id="${escapeHTML(item.id)}" aria-label="欣赏 ${escapeHTML(item.series)} ${escapeHTML(item.title)}">
             <div class="plate__frame">
               <div class="plate__image">
-                <img src="${escapeHTML(item.thumb)}" alt="${escapeHTML(item.series)} ${escapeHTML(item.title)}，${item.sample ? "示例藏品照片" : "私人藏品照片"}" loading="${index < 8 ? "eager" : "lazy"}" decoding="async" width="300" height="375">
+                <img src="${escapeHTML(gridImageFor(item))}" alt="${escapeHTML(item.series)} ${escapeHTML(item.title)}，${item.sample ? "示例藏品照片" : "私人藏品照片"}" loading="lazy" decoding="async" width="500" height="625">
                 ${item.sample ? '<span class="plate__sample">SAMPLE · 样张</span>' : ""}
                 <span class="plate__index">${escapeHTML(item.no)}</span>
                 <span class="plate__hover"><span>赏</span><em>VIEW PLATE</em></span>
@@ -936,35 +1409,6 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════════
-     tree controls & tooltip
-     ══════════════════════════════════════════════════════════════════════ */
-
-  function updateOrbitButton() {
-    el.orbitToggle.classList.toggle("is-paused", state.treePaused);
-    el.orbitToggle.setAttribute("aria-pressed", state.treePaused ? "true" : "false");
-    el.orbitIcon.textContent = state.treePaused ? "▶" : "Ⅱ";
-    const label = $(".dock-btn__label", el.orbitToggle);
-    if (label) label.textContent = state.treePaused ? "继续环游" : "暂停环游";
-  }
-
-  function handleTreeHover(item, x, y) {
-    if (!item) {
-      el.photoTip.classList.remove("is-visible");
-      return;
-    }
-    el.photoTipNo.textContent = `NO. ${item.no}`;
-    el.photoTipName.textContent = item.title;
-    el.photoTipSeries.textContent = item.series;
-    el.photoTip.classList.add("is-visible");
-    const width = el.photoTip.offsetWidth || 230;
-    const height = el.photoTip.offsetHeight || 32;
-    const left = Math.min(window.innerWidth - width - 14, Math.max(12, x + 18));
-    const top = Math.min(window.innerHeight - height - 14, Math.max(12, y + 18));
-    el.photoTip.style.left = `${left}px`;
-    el.photoTip.style.top = `${top}px`;
-  }
-
-  /* ══════════════════════════════════════════════════════════════════════
      viewer
      ══════════════════════════════════════════════════════════════════════ */
 
@@ -998,7 +1442,7 @@
     el.viewer.classList.add("is-open");
     el.viewer.setAttribute("aria-hidden", "false");
     document.body.classList.add("viewer-open");
-    state.tree?.setActive(false);
+    state.orbit.active = false;
 
     renderViewerItem(index, { resetRotation: true });
     animateViewerEntry(origin);
@@ -1227,7 +1671,10 @@
     if (restoreFocus && viewer.lastFocus && document.contains(viewer.lastFocus)) {
       try { viewer.lastFocus.focus({ preventScroll: true }); } catch {}
     }
-    if (state.route === "tree" && state.treeReady) state.tree.setActive(true);
+    if (state.route === "tree") {
+      state.orbit.active = true;
+      state.orbit.lastTime = performance.now();
+    }
   }
 
   function bindViewerEvents() {
@@ -1348,14 +1795,303 @@
     if (event.key === "Escape" && state.route === "collection" && (state.query || state.filters.series !== "all" || state.filters.rarity !== "all" || state.filters.favourite)) {
       resetAllFilters();
     }
-    if (event.key === " " && state.route === "tree" && !el.treeFallback.hidden) {
-      // leave the fallback buttons reachable; no interception needed
-    }
   }
 
   /* ══════════════════════════════════════════════════════════════════════
      atelier · upload + local classification
      ══════════════════════════════════════════════════════════════════════ */
+
+  /* ── AI settings drawer ─────────────────────────────────────────────── */
+
+  function loadAiSettings() {
+    let stored = null;
+    try {
+      stored = JSON.parse(window.localStorage.getItem(AI_CONFIG_KEY) || "null");
+    } catch {}
+    if (!stored) {
+      try {
+        stored = JSON.parse(window.sessionStorage.getItem(AI_SESSION_KEY) || "null");
+      } catch {}
+    }
+    if (stored && typeof stored === "object") {
+      const provider = AI_PRESETS[stored.provider] ? stored.provider : "local";
+      state.ai = {
+        provider,
+        base: typeof stored.base === "string" ? stored.base : "",
+        model: typeof stored.model === "string" ? stored.model : "",
+        key: typeof stored.key === "string" ? stored.key : "",
+        remember: Boolean(stored.remember),
+        configured: provider !== "local" && Boolean(stored.key && (stored.model || stored.base)),
+      };
+    }
+    updateAiStatus();
+  }
+
+  function persistAiSettings() {
+    const payload = {
+      provider: state.ai.provider,
+      base: state.ai.base,
+      model: state.ai.model,
+      key: state.ai.key,
+      remember: state.ai.remember,
+    };
+    try {
+      window.localStorage.removeItem(AI_CONFIG_KEY);
+      window.sessionStorage.removeItem(AI_SESSION_KEY);
+      if (state.ai.provider === "local" || !state.ai.key) return;
+      const target = state.ai.remember ? window.localStorage : window.sessionStorage;
+      target.setItem(state.ai.remember ? AI_CONFIG_KEY : AI_SESSION_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn("Could not persist AI config:", error);
+    }
+  }
+
+  function updateAiStatus() {
+    if (!el.aiStatusText) return;
+    const on = state.ai.configured;
+    el.aiStatusText.textContent = on ? `${AI_PRESETS[state.ai.provider].label} · 已接入` : "本地识别";
+    el.openAiSettings?.classList.toggle("is-on", on);
+    if (el.openAiSettings) {
+      el.openAiSettings.setAttribute("aria-label", on ? "AI 识别已接入，打开设置" : "接入 AI 识别");
+      const em = $("em", el.openAiSettings);
+      if (em) em.textContent = on ? "设置" : "接入 AI";
+    }
+  }
+
+  function applyAiProviderPreset(provider, options = {}) {
+    const preset = AI_PRESETS[provider] || AI_PRESETS.local;
+    if (!options.keepValues) {
+      el.aiBase.value = preset.base || "";
+      el.aiModel.value = preset.model || "";
+    }
+    el.aiFields.classList.toggle("is-local", provider === "local");
+    el.aiBase.placeholder = provider === "custom" ? "https://your-api.example.com/v1" : preset.base || "https://...";
+    el.aiModel.placeholder = provider === "custom" ? "你的模型 ID" : preset.model || "模型或推理接入点 ID";
+    el.aiFormStatus.textContent = preset.hint || "";
+  }
+
+  function openAiDrawer() {
+    if (!el.aiDrawer) return;
+    el.aiDrawer.inert = false;
+    el.aiDrawer.removeAttribute("inert");
+    el.aiDrawer.classList.add("is-open");
+    el.aiDrawer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("ai-open");
+    el.aiProvider.value = state.ai.provider;
+    el.aiKey.value = state.ai.key;
+    el.aiBase.value = state.ai.base;
+    el.aiModel.value = state.ai.model;
+    el.aiRemember.checked = state.ai.remember;
+    applyAiProviderPreset(state.ai.provider, { keepValues: true });
+    el.aiFormStatus.textContent = state.ai.configured ? "已接入，可直接上传照片使用。" : "填入 API Key 后保存；识别失败会自动回退到本地。";
+    window.setTimeout(() => el.aiProvider.focus({ preventScroll: true }), 100);
+  }
+
+  function closeAiDrawer() {
+    if (!el.aiDrawer) return;
+    el.aiDrawer.classList.remove("is-open");
+    el.aiDrawer.inert = true;
+    el.aiDrawer.setAttribute("inert", "");
+    el.aiDrawer.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("ai-open");
+  }
+
+  function saveAiSettingsFromForm(providerOverride) {
+    const provider = providerOverride || el.aiProvider.value;
+    const preset = AI_PRESETS[provider] || AI_PRESETS.local;
+    const key = provider === "local" ? "" : el.aiKey.value.trim();
+    const base = provider === "local" ? "" : (el.aiBase.value.trim() || preset.base || "");
+    const model = provider === "local" ? "" : (el.aiModel.value.trim() || preset.model || "");
+    if (provider !== "local" && !key) {
+      el.aiFormStatus.textContent = "还需要填入 API Key。";
+      el.aiKey.focus();
+      return false;
+    }
+    if (provider !== "local" && (!base || !model)) {
+      el.aiFormStatus.textContent = "还需要填写 Base URL 与模型 ID（豆包等服务商会自动预填）。";
+      (base ? el.aiModel : el.aiBase).focus();
+      return false;
+    }
+    state.ai = {
+      provider,
+      base,
+      model,
+      key,
+      remember: el.aiRemember.checked,
+      configured: provider !== "local" && Boolean(key && (model || base)),
+    };
+    persistAiSettings();
+    updateAiStatus();
+    if (provider === "local") {
+      el.aiFormStatus.textContent = "已切回本地识别，未保存任何 Key。";
+    } else {
+      el.aiFormStatus.textContent = `已启用 ${preset.label}，上传照片时会调用视觉模型。`;
+    }
+    return true;
+  }
+
+  function bindAiDrawerEvents() {
+    el.openAiSettings?.addEventListener("click", openAiDrawer);
+    el.aiDrawerClose?.addEventListener("click", closeAiDrawer);
+    el.aiDrawerVeil?.addEventListener("click", closeAiDrawer);
+
+    el.aiProvider?.addEventListener("change", () => {
+      const provider = el.aiProvider.value;
+      applyAiProviderPreset(provider);
+      el.aiFormStatus.textContent = AI_PRESETS[provider]?.hint || "";
+    });
+
+    el.aiKeyToggle?.addEventListener("click", () => {
+      const showing = el.aiKey.type === "text";
+      el.aiKey.type = showing ? "password" : "text";
+      el.aiKeyToggle.textContent = showing ? "显示" : "隐藏";
+    });
+
+    el.aiForm?.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (saveAiSettingsFromForm()) {
+        window.setTimeout(closeAiDrawer, 500);
+        showToast(state.ai.configured ? `AI 识藏已接入 · ${AI_PRESETS[state.ai.provider].label}` : "已切回本地识别");
+      }
+    });
+
+    el.aiDisable?.addEventListener("click", () => {
+      el.aiProvider.value = "local";
+      applyAiProviderPreset("local");
+      saveAiSettingsFromForm("local");
+      showToast("已切回本地识别。");
+      window.setTimeout(closeAiDrawer, 300);
+    });
+
+    el.aiDrawer?.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeAiDrawer();
+        el.openAiSettings?.focus({ preventScroll: true });
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = $$("button, input, select, a[href]", el.aiDrawer)
+        .filter((node) => !node.disabled && node.getClientRects().length);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    applyAiProviderPreset(state.ai.provider, { keepValues: true });
+    updateAiStatus();
+  }
+
+  async function imageToDataUrl(previewUrl, maxWidth = 900) {
+    const image = await loadImage(previewUrl);
+    const ratio = Math.min(1, maxWidth / image.naturalWidth);
+    const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+    const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.86);
+  }
+
+  function normalizeAiSeries(value) {
+    const raw = String(value || "").toUpperCase().replace(/[\s_-]+/g, "");
+    if (!raw || raw === "UNKNOWN") return null;
+    const aliases = {
+      SWEETBEAN: "sweetbean",
+      SKULLPANDA: "skullpanda",
+      "骷髅熊猫": "skullpanda",
+      MOLLY: "molly",
+      DIMOO: "dimoo",
+      LABUBU: "labubu",
+      HIRONO: "hirono",
+      CRYBABY: "crybaby",
+      PUCKY: "pucky",
+      NYOTA: "nyota",
+      ZIMOMO: "zimomo",
+    };
+    if (aliases[raw]) return aliases[raw];
+    return SERIES_ORDER.find((key) => SERIES[key].keywords.some((keyword) => raw.includes(keyword.toUpperCase().replace(/[\s_-]+/g, "")))) || null;
+  }
+
+  async function classifyWithAi(previewUrl) {
+    if (!state.ai.configured || state.ai.provider === "local" || !state.ai.key) return null;
+    const base = (state.ai.base || AI_PRESETS[state.ai.provider]?.base || "").replace(/\/+$/, "");
+    const model = state.ai.model || AI_PRESETS[state.ai.provider]?.model;
+    if (!base || !model) throw new Error("AI 接口的 Base URL 或模型为空");
+    const endpoint = /\/chat\/completions$/i.test(base) ? base : `${base}/chat/completions`;
+    const dataUrl = await imageToDataUrl(previewUrl);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 40000);
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${state.ai.key}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: AI_PROMPT },
+                { type: "image_url", image_url: { url: dataUrl } },
+              ],
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 420,
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      window.clearTimeout(timer);
+      if (error?.name === "AbortError") throw new Error("AI 接口超时");
+      throw new Error("AI 接口连接失败（可能是跨域或网络问题）");
+    }
+    window.clearTimeout(timer);
+    if (!response.ok) {
+      let detail = "";
+      try {
+        const body = await response.json();
+        detail = body?.error?.message || body?.message || "";
+      } catch {}
+      throw new Error(`AI 接口返回 ${response.status}${detail ? `：${detail.slice(0, 90)}` : ""}`);
+    }
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    const text = Array.isArray(content)
+      ? content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("")
+      : String(content || "");
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("AI 返回内容不是有效 JSON");
+    let parsed;
+    try {
+      parsed = JSON.parse(match[0]);
+    } catch {
+      throw new Error("AI 返回 JSON 解析失败");
+    }
+    const seriesKey = normalizeAiSeries(parsed.series);
+    if (!seriesKey) return null;
+    return {
+      seriesKey,
+      title: typeof parsed.title === "string" ? parsed.title.trim().slice(0, 12) : "",
+      character: typeof parsed.character === "string" ? parsed.character.trim().slice(0, 32) : "",
+      reason: typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 60) : "",
+      confidence: clamp(Number(parsed.confidence) || 0.8, 0.35, 1),
+    };
+  }
 
   function bindAtelierEvents() {
     el.browseBtn.addEventListener("click", (event) => {
@@ -1411,7 +2147,7 @@
         const picks = [state.demo[2], state.demo[84], state.demo[164]].filter(Boolean);
         const files = [];
         for (const item of picks) {
-          const response = await fetch(item.thumb);
+          const response = await fetch(heroImageFor(item));
           if (!response.ok) continue;
           const blob = await response.blob();
           files.push(new File([blob], `${item.seriesKey}-sample.webp`, { type: blob.type || "image/webp" }));
@@ -1477,7 +2213,9 @@
     el.scanGrid.innerHTML = "";
     el.scanProgressLabel.textContent = `0 / ${batch.length}`;
     el.scanBar.style.width = "0%";
-    el.scanCaption.textContent = "正在读取轮廓、配色与系列特征…";
+    el.scanCaption.textContent = state.ai.configured
+      ? `正在调用 ${AI_PRESETS[state.ai.provider].label} 看图…`
+      : "正在读取轮廓、配色与系列特征…";
     el.confirmImport.disabled = true;
 
     const previewUrls = [];
@@ -1494,15 +2232,23 @@
 
     const results = [];
     let failed = 0;
+    let aiFailures = 0;
+    let aiFailureMessage = "";
     for (let i = 0; i < batch.length; i += 1) {
       const file = batch[i];
       const thumbEl = el.scanGrid.querySelector(`[data-scan-index="${i}"]`);
       thumbEl?.classList.add("is-scanning");
-      el.scanCaption.textContent = `正在分析第 ${i + 1} 张照片…`;
-      await wait(190);
+      el.scanCaption.textContent = state.ai.configured
+        ? `${AI_PRESETS[state.ai.provider].label} 正在识别第 ${i + 1} 张…`
+        : `正在分析第 ${i + 1} 张照片…`;
+      await wait(state.ai.configured ? 80 : 190);
       try {
         const result = await analyseUpload(file, previewUrls[i]);
         results.push(result);
+        if (result.aiAttempted && !result.aiUsed) {
+          aiFailures += 1;
+          if (!aiFailureMessage) aiFailureMessage = result.aiError || "接口未返回结果";
+        }
       } catch (error) {
         failed += 1;
         console.warn("Could not read upload", file?.name, error);
@@ -1541,19 +2287,37 @@
     renderIdentifyResults();
     el.identifyResults.hidden = false;
     el.confirmImport.disabled = false;
-    if (failed) showToast(`${results.length} 张照片已识别，${failed} 张无法读取。`);
+    if (aiFailures) {
+      showToast(`AI 识别失败 ${aiFailures} 张，已使用本地识别${aiFailureMessage ? `：${aiFailureMessage}` : ""}`);
+    } else if (failed) {
+      showToast(`${results.length} 张照片已识别，${failed} 张无法读取。`);
+    }
   }
 
   async function analyseUpload(file, previewUrl) {
     const image = await loadImage(previewUrl);
     const features = analysePixels(image);
     features.extraSeed = file.size || 0;
-    const match = classifyByName(file.name) || classifyByColour(features);
-    const meta = match.meta;
-    const thumbBlob = await resizeToBlob(image, 320, 400, 0.82);
+    const localMatch = classifyByName(file.name) || classifyByColour(features);
+    let aiResult = null;
+    let aiAttempted = false;
+    let aiError = "";
+    if (state.ai.configured) {
+      aiAttempted = true;
+      try {
+        aiResult = await classifyWithAi(previewUrl);
+        if (!aiResult) aiError = "模型没有辨认出系列";
+      } catch (error) {
+        aiError = error?.message || "AI 接口失败";
+      }
+    }
+    const aiMeta = aiResult ? findSeries(aiResult.seriesKey) : null;
+    const meta = aiMeta || localMatch.meta;
+    const thumbBlob = await resizeToBlob(image, 500, 625, 0.84);
     const fullBlob = await resizeToBlob(image, 1400, 1750, 0.88);
     if (!thumbBlob || !fullBlob) throw new Error("Could not encode image");
-    const title = makeTitle(file.name, meta, features);
+    const localTitle = makeTitle(file.name, meta, features);
+    const title = aiResult?.title || localTitle;
     return {
       file,
       previewUrl,
@@ -1561,12 +2325,26 @@
       fullBlob,
       seriesKey: meta.key,
       manual: false,
-      confidence: match.confidence,
+      confidence: aiResult ? aiResult.confidence : localMatch.confidence,
       title,
       width: image.naturalWidth,
       height: image.naturalHeight,
       createdAt: Date.now(),
       demo: false,
+      aiAttempted,
+      aiUsed: Boolean(aiResult),
+      aiError,
+      engine: aiResult ? AI_PRESETS[state.ai.provider].label : "本地识别",
+      engineShort: aiResult
+        ? state.ai.provider === "doubao"
+          ? "豆包 AI"
+          : state.ai.provider === "siliconflow"
+            ? "硅基 AI"
+            : state.ai.provider === "openrouter"
+              ? "OpenRouter"
+              : "AI"
+        : "本地",
+      aiReason: aiResult?.reason || "",
     };
   }
 
@@ -1743,7 +2521,7 @@
           <div class="result-card__body">
             <div class="result-card__topline">
               <span class="result-card__series-label">${escapeHTML(meta.name)} · ${escapeHTML(meta.cn)}</span>
-              <span class="result-card__confidence">${result.manual ? "手动确认" : `AI ${Math.round(result.confidence * 100)}%`}</span>
+              <span class="result-card__confidence">${result.manual ? "手动确认" : `${escapeHTML(result.engineShort || "本地")} ${Math.round(result.confidence * 100)}%`}</span>
             </div>
             <p class="result-card__title">${escapeHTML(result.title)}</p>
             <div class="result-card__select-wrap">
@@ -1792,6 +2570,8 @@
         accent: meta.accent,
         confidence: result.confidence,
         manual: result.manual,
+        aiEngine: result.aiUsed ? result.engine : "",
+        aiReason: result.aiReason || "",
         sample: false,
         thumb: "",
         src: "",
@@ -1837,10 +2617,9 @@
 
     resetAtelierUI({ keepCustom: true });
     refreshDataViews();
-    state.treeDirty = true;
     navigate("collection");
     el.collectionView.scrollTop = 0;
-    showToast(`已入藏 ${inserted} 件新藏品，星树将在下次进入时重新点亮。`);
+    showToast(`已入藏 ${inserted} 件新藏品，星树已重新编排。`);
     el.confirmImport.disabled = false;
     if (labelNode) labelNode.textContent = "确认入藏";
   }
@@ -1922,7 +2701,6 @@
     state.customSequence = 0;
     saveFavourites();
     refreshDataViews();
-    state.treeDirty = true;
     showToast("已清空你导入的本地照片。");
   }
 

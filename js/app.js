@@ -32,7 +32,7 @@
     { key: "violet", name: "VIOLET TONES", cn: "夜紫收藏", hue: 266, accent: "#c6b2dc", accentDim: "#7f7194", collection: "色彩归档", collectionEn: "CHROMA", intro: "夜色里的一点紫，是最后一份未命名的礼物。" },
     { key: "berry", name: "BERRY TONES", cn: "莓紫收藏", hue: 315, accent: "#d6a7c9", accentDim: "#8d6a83", collection: "色彩归档", collectionEn: "CHROMA", intro: "酸甜的颜色，先替它留一个位置。" },
   ];
-  const ACT_SIZE = 25;
+  const ACT_SIZE = 10;
   const ACT_TITLES = [
     "雪落之前",
     "松间来信",
@@ -42,6 +42,18 @@
     "暖灯小聚",
     "星屑入梦",
     "长夜晚安",
+    "白昼微光",
+    "炉火旁",
+    "雪松低语",
+    "银色清晨",
+    "槲寄生下",
+    "初雪信箱",
+    "星夜归人",
+    "零点钟声",
+    "新年将至",
+    "冬青小径",
+    "银河邮差",
+    "极夜回声",
   ];
 
   function buildAiPrompt(context = {}) {
@@ -97,7 +109,7 @@ ${known}
       label: "豆包 Seed Vision",
       base: "https://ark.cn-beijing.volces.com/api/v3",
       model: "doubao-seed-2-0-lite-260215",
-      hint: "火山方舟提供的豆包视觉模型，需在控制台开通并复制模型/接入点 ID。",
+      hint: "火山方舟视觉模型。Base 固定用 /api/v3；模型填已开通的完整 Model ID，或 ep- 开头的 Endpoint ID。404 通常是模型未开通或 ID 不正确。",
     },
     siliconflow: {
       label: "硅基流动",
@@ -619,7 +631,7 @@ ${known}
         number: $(".orbit-card__number", slot),
         series: $(".orbit-card__series", slot),
         title: $(".orbit-card__title", slot),
-        baseAngle: (i / ACT_SIZE) * Math.PI * 2 + (Math.random() - 0.5) * 0.08,
+        baseT: i / ACT_SIZE + (Math.random() - 0.5) * 0.014,
         phase: Math.random() * Math.PI * 2,
         item: null,
       });
@@ -819,24 +831,18 @@ ${known}
     const tree = el.treeSculpture.getBoundingClientRect();
     if (!stage.width || !tree.width) return;
     const mobile = stage.width <= 760;
-    const compact = stage.width < 1180;
     const cx = tree.left - stage.left + tree.width / 2;
-    const cy = tree.top - stage.top + tree.height * 0.53;
-    const radiusX = mobile
-      ? Math.min(stage.width * 0.43, tree.width * 0.9)
-      : compact
-        ? Math.min(stage.width * 0.36, tree.width * 0.9)
-        : Math.min(stage.width * 0.34, tree.width * 0.92);
-    const radiusY = mobile
-      ? Math.min(stage.height * 0.19, tree.height * 0.4)
-      : compact
-        ? Math.min(stage.height * 0.25, tree.height * 0.4)
-        : Math.min(stage.height * 0.29, tree.height * 0.42);
+    const pathTop = tree.top - stage.top + tree.height * 0.055;
+    const pathHeight = tree.height * 0.89;
+    const amplitude = mobile
+      ? Math.min(tree.width * 0.56, stage.width * 0.3)
+      : Math.min(tree.width * 0.52, stage.width * 0.24);
     state.orbit.layout = {
       cx,
-      cy,
-      radiusX,
-      radiusY,
+      cy: pathTop + pathHeight / 2,
+      pathTop,
+      pathHeight,
+      amplitude,
       width: stage.width,
       height: stage.height,
       treeW: tree.width,
@@ -862,32 +868,28 @@ ${known}
     const dt = Math.min(0.05, Math.max(0, (now - state.orbit.lastTime) / 1000));
     state.orbit.lastTime = now;
     if (!state.orbit.paused && !state.orbit.dragging) {
-      state.orbit.angle += dt * 0.095;
+      // A slow, continuous ribbon. A whole S takes about 70 seconds.
+      state.orbit.angle += dt * 0.014;
     }
     state.orbit.offset += (state.orbit.targetOffset - state.orbit.offset) * 0.075;
-    const totalAngle = state.orbit.angle + state.orbit.offset;
+    const totalOffset = state.orbit.angle + state.orbit.offset;
     state.orbit.cards.forEach((card) => {
       if (card.el.hidden) return;
-      const angle = card.baseAngle + totalAngle;
-      const sin = Math.sin(angle);
-      const cos = Math.cos(angle);
-      const x = layout.cx + cos * layout.radiusX;
-      const y = layout.cy + sin * layout.radiusY;
-      const depth = (sin + 1) / 2;
-      const scale = 0.7 + depth * 0.4;
-      // Cards that drift behind the tree silhouette fade away instead of
-      // turning into a stack of ghost rectangles. Everything remains in the
-      // same orbit and comes back into the light on the other side.
-      const treeTop = layout.cy - layout.treeH * 0.46;
-      const vertical = clamp((y - treeTop) / layout.treeH, 0, 1);
-      const treeHalf = layout.treeW * (0.055 + 0.39 * vertical);
-      const edgeDistance = Math.abs(x - layout.cx);
-      const visibility = clamp((edgeDistance - treeHalf * 0.72) / (layout.treeW * 0.12), 0, 1);
-      const opacity = (0.38 + depth * 0.62) * visibility;
+      let t = (card.baseT + totalOffset) % 1;
+      if (t < 0) t += 1;
+      // A serpentine over the tree: right at the crown, left through the
+      // middle, right again, then left at the hem. Cards grow from small at
+      // the top to large at the bottom as they travel the curve.
+      const x = layout.cx + Math.cos(t * Math.PI * 2.5) * layout.amplitude;
+      const y = layout.pathTop + t * layout.pathHeight;
+      const scale = 0.58 + t * 0.58;
+      const edgeFade = clamp(Math.min(t, 1 - t) / 0.055, 0, 1);
+      const opacity = (0.56 + t * 0.44) * edgeFade;
+      const tilt = Math.sin(t * Math.PI * 2.5 + 0.35) * 3.2;
       card.el.style.opacity = opacity.toFixed(3);
-      card.el.style.pointerEvents = visibility < 0.32 ? "none" : "auto";
-      card.el.style.zIndex = String(20 + Math.round(depth * 30));
-      card.el.style.transform = `translate3d(calc(${x.toFixed(2)}px - 50%), calc(${y.toFixed(2)}px - 50%), 0) scale(${scale.toFixed(3)}) rotate(${(cos * 1.8).toFixed(2)}deg)`;
+      card.el.style.pointerEvents = opacity < 0.18 ? "none" : "auto";
+      card.el.style.zIndex = String(40 + Math.round(t * 120));
+      card.el.style.transform = `translate3d(calc(${x.toFixed(2)}px - 50%), calc(${y.toFixed(2)}px - 50%), 0) scale(${scale.toFixed(3)}) rotate(${tilt.toFixed(2)}deg)`;
     });
   }
 
@@ -929,8 +931,7 @@ ${known}
       }
       if (!state.orbit.moved) return;
       event.preventDefault();
-      state.orbit.targetOffset = state.orbit.startOffset + dx * 0.0054;
-      state.orbit.angle += dx * 0.00008;
+      state.orbit.targetOffset = state.orbit.startOffset + dx * 0.0018;
       state.orbit.suppressClick = true;
       updateOrbitFrame(performance.now());
     });
@@ -2071,7 +2072,7 @@ ${known}
         "aria-label",
         configured ? `${label}${verified ? "已验证" : failed ? "调用失败" : "已配置，尚未验证"}，打开设置` : "接入 AI 识别",
       );
-      el.openAiSettings.title = el.aiStatusText.textContent;
+      el.openAiSettings.title = state.ai.lastError || el.aiStatusText.textContent;
       const em = $("em", el.openAiSettings);
       if (em) em.textContent = configured ? "设置" : "接入 AI";
     }
@@ -2192,8 +2193,8 @@ ${known}
         showToast(`AI 真实调用失败：${result.error}`);
         return;
       }
-      el.aiFormStatus.textContent = "真实调用成功，接口已有响应。识图时还会再调用一次。";
-      showToast(`AI 接口已验证 · ${AI_PRESETS[state.ai.provider].label}`);
+      el.aiFormStatus.textContent = "真实视觉调用成功，接口已返回响应。识图时还会再调用一次。";
+      showToast(`AI 视觉接口已验证 · ${AI_PRESETS[state.ai.provider].label}`);
       window.setTimeout(closeAiDrawer, 800);
     });
 
@@ -2208,8 +2209,8 @@ ${known}
       const result = await testAiConnection();
       el.aiTest.disabled = false;
       el.aiFormStatus.textContent = result.ok
-        ? "真实调用成功，已收到模型响应。"
-        : `真实调用失败：${result.error}`;
+        ? "真实视觉调用成功，已收到模型响应。"
+        : `真实视觉调用失败：${result.error}`;
     });
 
     el.aiDisable?.addEventListener("click", () => {
@@ -2265,9 +2266,17 @@ ${known}
   }
 
   function aiEndpoint() {
-    const base = (state.ai.base || AI_PRESETS[state.ai.provider]?.base || "").replace(/\/+$/, "");
+    let base = (state.ai.base || AI_PRESETS[state.ai.provider]?.base || "").trim().replace(/\/+$/, "");
     if (!base) throw new Error("AI 接口的 Base URL 为空");
-    return /\/chat\/completions$/i.test(base) ? base : `${base}/chat/completions`;
+    if (state.ai.provider === "doubao") {
+      // The Ark OpenAI-compatible root is /api/v3. Help pasted host-only or
+      // /api URLs converge to the same endpoint instead of producing a 404.
+      if (/^https?:\/\/[^/]+$/i.test(base)) base += "/api/v3";
+      else if (/\/api\/?$/i.test(base)) base = base.replace(/\/api\/?$/i, "/api/v3");
+      else if (/\/v3$/i.test(base) && !/\/api\/v3$/i.test(base)) base = base.replace(/\/v3$/i, "/api/v3");
+    }
+    if (/\/chat\/completions\/?$/i.test(base)) return base.replace(/\/+$/, "");
+    return `${base}/chat/completions`;
   }
 
   async function postAiChat(payload, timeoutMs = 40000) {
@@ -2290,15 +2299,50 @@ ${known}
           const body = await response.json();
           detail = body?.error?.message || body?.message || "";
         } catch {}
-        throw new Error(`AI 接口返回 ${response.status}${detail ? `：${detail.slice(0, 110)}` : ""}`);
+        let hint = "";
+        if (state.ai.provider === "doubao") {
+          if (response.status === 404) {
+            hint = "；404 通常表示模型未开通或 Model ID / Endpoint ID 不正确。请到火山方舟控制台「开通管理」确认模型已开通，并复制完整 Model ID（或 ep- 开头的 Endpoint ID）；Base URL 应为 https://ark.cn-beijing.volces.com/api/v3";
+          } else if (response.status === 401 || response.status === 403) {
+            hint = "；请确认 API Key 属于当前火山方舟项目，并已开通该视觉模型";
+          }
+        } else if (state.ai.provider === "deepseek" && response.status === 404) {
+          hint = "；请确认模型为 deepseek-flash（或当前账号可用的视觉模型），并用 https://api.deepseek.com 作为 Base URL";
+        } else if (state.ai.provider === "deepseek" && (response.status === 400 || response.status === 422)) {
+          hint = "；DeepSeek 拒绝了这次图像/工具请求。项目会自动再试一次不带联网工具的纯视觉请求；若仍失败，请确认账号与模型支持图片输入";
+        }
+        throw new Error(`AI 接口返回 ${response.status}${detail ? `：${detail.slice(0, 120)}` : ""}${hint}`);
       }
       return response;
     } catch (error) {
       window.clearTimeout(timer);
       if (error?.name === "AbortError") throw new Error("AI 接口超时");
       if (String(error?.message || "").startsWith("AI 接口返回")) throw error;
-      throw new Error("AI 接口连接失败（可能是跨域或网络问题）");
+      throw new Error("AI 接口连接失败（可能是跨域、网络或服务商地址问题）");
     }
+  }
+
+  function makeVisionTestImage() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext("2d");
+    const bg = ctx.createLinearGradient(0, 0, 256, 256);
+    bg.addColorStop(0, "#101d16");
+    bg.addColorStop(1, "#29121b");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = "#e8c493";
+    ctx.beginPath();
+    ctx.arc(128, 120, 58, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#7f2839";
+    ctx.beginPath();
+    ctx.arc(128, 120, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,244,221,.9)";
+    ctx.fillRect(122, 12, 12, 55);
+    return canvas.toDataURL("image/jpeg", 0.82);
   }
 
   async function testAiConnection() {
@@ -2310,9 +2354,15 @@ ${known}
     try {
       const response = await postAiChat({
         model,
-        messages: [{ role: "user", content: "这是接口连通性测试。请只回复 OK。" }],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: "这是接口与看图能力的连通性测试。请看图并只回复 OK。" },
+            { type: "image_url", image_url: { url: makeVisionTestImage() } },
+          ],
+        }],
         temperature: 0,
-        max_tokens: 16,
+        max_tokens: 24,
       }, 30000);
       const data = await response.json();
       const text = data?.choices?.[0]?.message?.content;
@@ -2359,47 +2409,43 @@ ${known}
       // for the Messages protocol and may be rejected by stricter gateways.
       payload.tools = [{ type: "deepseek_web_search" }];
     }
-    let response;
-    try {
-      response = await postAiChat(payload, 60000);
-    } catch (error) {
-      // If a provider rejects the built-in search declaration, retry once
-      // without tools and keep the visual answer usable.
-      if (useWebSearch) {
+    // If the search request or its answer cannot be parsed, retry once with a
+    // pure vision request. A working image call should never be lost because
+    // the optional web-search path failed.
+    const attempts = useWebSearch ? [true, false] : [false];
+    let parsed = null;
+    let lastError = null;
+    for (const includeTools of attempts) {
+      const requestBody = { ...payload };
+      if (!includeTools) delete requestBody.tools;
+      try {
+        const response = await postAiChat(requestBody, includeTools ? 60000 : 40000);
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        const text = Array.isArray(content)
+          ? content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("")
+          : String(content || "");
+        const match = text.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error("AI 调用成功，但返回内容不是 JSON");
         try {
-          const fallbackPayload = { ...payload };
-          delete fallbackPayload.tools;
-          response = await postAiChat(fallbackPayload, 40000);
-          webSearchUsed = false;
-        } catch (retryError) {
-          state.ai.lastError = retryError?.message || error?.message || "AI 调用失败";
-          updateAiStatus();
-          throw retryError;
+          parsed = JSON.parse(match[0]);
+        } catch {
+          throw new Error("AI 返回 JSON 解析失败");
         }
-      } else {
+        webSearchUsed = includeTools && useWebSearch;
+        state.ai.verified = true;
+        state.ai.lastError = "";
+        state.ai.lastCallAt = Date.now();
+        state.ai.calls += 1;
+        updateAiStatus();
+        break;
+      } catch (error) {
+        lastError = error;
         state.ai.lastError = error?.message || "AI 调用失败";
         updateAiStatus();
-        throw error;
       }
     }
-    state.ai.verified = true;
-    state.ai.lastError = "";
-    state.ai.lastCallAt = Date.now();
-    state.ai.calls += 1;
-    updateAiStatus();
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    const text = Array.isArray(content)
-      ? content.map((part) => (typeof part === "string" ? part : part?.text || "")).join("")
-      : String(content || "");
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("AI 调用成功，但返回内容不是 JSON");
-    let parsed;
-    try {
-      parsed = JSON.parse(match[0]);
-    } catch {
-      throw new Error("AI 返回 JSON 解析失败");
-    }
+    if (!parsed) throw lastError || new Error("AI 调用失败");
     const known = resolveSeriesName(parsed.series);
     const rawName = String(parsed.series || "").trim();
     const unknownName = !rawName || /^(UNKNOWN|未知|N\/A|无)$/i.test(rawName);
@@ -3003,7 +3049,7 @@ ${known}
                   ? `本地：${escapeHTML(result.localGuess || "未判断")} → ${result.aiWebSearch ? "DeepSeek 联网" : escapeHTML(result.engineShort || "AI")}复核：${escapeHTML(meta.name)}`
                   : result.aiResponded
                     ? `本地：${escapeHTML(result.localGuess || "未判断")} → AI 未给出可用分类，已回退本地`
-                    : `本地：${escapeHTML(result.localGuess || "未判断")} → AI 调用失败，已回退本地`
+                    : `本地：${escapeHTML(result.localGuess || "未判断")} → AI 调用失败：${escapeHTML((result.aiError || "未知错误").slice(0, 110))}，已回退本地`
                 : `本地：${escapeHTML(result.localGuess || "未判断")}${state.ai.configured ? "" : "（未启用 AI）"}`
             }</p>
             <div class="result-card__select-wrap">

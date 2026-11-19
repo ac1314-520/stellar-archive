@@ -26,7 +26,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261119e">
+  <link rel="stylesheet" href="css/styles.css?v=20261120a">
 </head>
 <body>
   <a class="skip-link" href="#collection">跳到藏品馆</a>
@@ -42,7 +42,7 @@
       <div class="preloader__track"><span id="loadBar"></span></div>
       <div class="preloader__meta">
         <span id="loadStatus">正在挂上第一件藏品</span>
-        <span><em id="loadPercent">00</em> / <span id="loadTotal">25</span></span>
+        <span><em id="loadPercent">00</em> / <span id="loadTotal">10</span></span>
       </div>
     </div>
     <p class="preloader__foot">A PRIVATE WINTER EXHIBITION</p>
@@ -131,13 +131,6 @@
           围着圣诞树，慢慢走进光里。
         </p>
         <p class="hero__mobile-hint"><span aria-hidden="true">✦</span> 轻点照片 · 360° 欣赏</p>
-        <div class="mobile-orbit-bar" aria-label="星轨控制">
-          <span class="mobile-orbit-bar__act"><b id="mobileActCurrent">01</b> / <span id="mobileActTotal">08</span></span>
-          <button type="button" data-orbit-action="toggle">
-            <span class="mobile-orbit-bar__icon" data-orbit-icon>Ⅱ</span><span data-orbit-label>暂停</span>
-          </button>
-          <button type="button" data-act-action="next">下一幕 <span aria-hidden="true">→</span></button>
-        </div>
         <div class="hero__meta">
           <div class="hero__stat">
             <strong id="heroCount">200</strong>
@@ -165,7 +158,7 @@
         <p class="hero__orbit-hint">拖动环绕 · 点击照片放大 · 一幕接一幕</p>
       </div>
 
-      <aside class="act-rail" aria-label="八幕展陈">
+      <aside class="act-rail" aria-label="展幕索引">
         <div class="act-rail__head">
           <span>THE WINTER ACTS</span>
           <em>展幕</em>
@@ -174,7 +167,7 @@
         <div class="act-rail__now">
           <strong id="actRailCurrent">01</strong>
           <i aria-hidden="true"></i>
-          <span id="actRailTotal">08</span>
+          <span id="actRailTotal">20</span>
         </div>
         <p class="act-rail__title" id="actRailTitle">雪落之前</p>
         <p class="act-rail__note">换一幕，便换一组藏品<br>全部藏品都在馆中</p>
@@ -196,7 +189,7 @@
         </div>
         <div class="tree-dock__center tree-dock__center--act">
           <span class="act-dock__number" id="actCounter">01</span>
-          <span class="act-dock__total" id="actDockTotal">/ 08 幕</span>
+          <span class="act-dock__total" id="actDockTotal">/ 20 幕</span>
           <i aria-hidden="true"></i>
           <p id="actTitle">雪落之前</p>
         </div>
@@ -217,6 +210,15 @@
         <i></i>
         <span>MMXXVI</span>
       </div>
+
+      <div class="mobile-orbit-bar" aria-label="星轨控制">
+        <span class="mobile-orbit-bar__act"><b id="mobileActCurrent">01</b> / <span id="mobileActTotal">20</span></span>
+        <button type="button" data-orbit-action="toggle">
+          <span class="mobile-orbit-bar__icon" data-orbit-icon>Ⅱ</span><span data-orbit-label>暂停</span>
+        </button>
+        <button type="button" data-act-action="next">下一幕 <span aria-hidden="true">→</span></button>
+      </div>
+
       <p class="sr-only" id="actAnnouncement" aria-live="polite"></p>
     </section>
 
@@ -651,9 +653,9 @@
     <div class="noscript">星屿藏馆需要 JavaScript 才能点亮星树。请在浏览器中启用 JavaScript 后重新打开。</div>
   </noscript>
 
-  <script src="js/series.js?v=20261119e"></script>
-  <script src="js/collection-data.js?v=20261119e"></script>
-  <script src="js/tree-particles.js?v=20261119e"></script>
-  <script src="js/app.js?v=20261119e"></script>
+  <script src="js/series.js?v=20261120a"></script>
+  <script src="js/collection-data.js?v=20261120a"></script>
+  <script src="js/tree-particles.js?v=20261120a"></script>
+  <script src="js/app.js?v=20261120a"></script>
 </body>
 </html>

@@ -9,9 +9,11 @@
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const escapeHTML = window.STELLAR_ESCAPE;
   const formatDate = window.STELLAR_FORMAT_DATE;
-  const findSeries = window.STELLAR_SERIES_FIND;
-  const SERIES = window.STELLAR_SERIES;
-  const SERIES_ORDER = window.STELLAR_SERIES_ORDER;
+  const BASE_SERIES = window.STELLAR_SERIES;
+  const BASE_SERIES_ORDER = window.STELLAR_SERIES_ORDER;
+  const SERIES = Object.assign({}, BASE_SERIES);
+  let SERIES_ORDER = BASE_SERIES_ORDER.slice();
+  const findSeries = (key) => SERIES[key] || null;
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
   const DB_NAME = "stellar-archive-v1";
@@ -19,7 +21,17 @@
   const FAV_KEY = "stellar-archive:favourites:v1";
   const AI_CONFIG_KEY = "stellar-archive:ai-config:v1";
   const AI_SESSION_KEY = "stellar-archive:ai-session:v1";
+  const CUSTOM_SERIES_KEY = "stellar-archive:custom-series:v1";
   const MAX_UPLOAD_BATCH = 30;
+  const OTHER_SERIES_KEY = "other";
+  const COLOUR_FAMILIES = [
+    { key: "rose", name: "ROSE TONES", cn: "柔粉收藏", hue: 348, accent: "#e8b1bd", accentDim: "#98727b", collection: "色彩归档", collectionEn: "CHROMA", intro: "用一层柔粉，把还没归属的喜欢先收好。" },
+    { key: "gold", name: "GOLD TONES", cn: "暖金收藏", hue: 42, accent: "#dfbf8b", accentDim: "#957b55", collection: "色彩归档", collectionEn: "CHROMA", intro: "像一小片暖光，落在尚未命名的藏品上。" },
+    { key: "moss", name: "MOSS TONES", cn: "苔绿收藏", hue: 92, accent: "#bdca9d", accentDim: "#7d875f", collection: "色彩归档", collectionEn: "CHROMA", intro: "把森林的颜色，留给还没有归处的它。" },
+    { key: "mist", name: "MIST TONES", cn: "雾蓝收藏", hue: 198, accent: "#aacddb", accentDim: "#6c8791", collection: "色彩归档", collectionEn: "CHROMA", intro: "雾一样的蓝，也值得拥有自己的位置。" },
+    { key: "violet", name: "VIOLET TONES", cn: "夜紫收藏", hue: 266, accent: "#c6b2dc", accentDim: "#7f7194", collection: "色彩归档", collectionEn: "CHROMA", intro: "夜色里的一点紫，是最后一份未命名的礼物。" },
+    { key: "berry", name: "BERRY TONES", cn: "莓紫收藏", hue: 315, accent: "#d6a7c9", accentDim: "#8d6a83", collection: "色彩归档", collectionEn: "CHROMA", intro: "酸甜的颜色，先替它留一个位置。" },
+  ];
   const ACT_SIZE = 25;
   const ACT_TITLES = [
     "雪落之前",
@@ -32,20 +44,34 @@
     "长夜晚安",
   ];
 
-  const AI_PROMPT = `你是泡泡玛特潮玩藏品的视觉鉴定师。请仔细看这张照片，识别其中的角色与系列。
+  function buildAiPrompt() {
+    const known = SERIES_ORDER.map((key) => {
+      const meta = SERIES[key];
+      return `${meta.name}／${meta.cn || meta.name}`;
+    }).join("、");
+    return `你是泡泡玛特及潮玩藏品的视觉鉴定师。请仔细看这张照片，识别其中的角色、IP 与系列。
 
-只能从下面 10 个系列中选择：
-MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIMOMO
-如果照片中没有可辨认的泡泡玛特角色，series 返回 "UNKNOWN"。
+已知分类（英文／中文）：
+${known}
+
+规则：
+1. 如果能确定是上面某个分类，series 必须填完全一致的英文分类名，new_series 为 false。
+2. 如果确定是泡泡玛特 IP，但它不在上面列表，或者它根本不是泡泡玛特、而是其他品牌/潮玩，不要硬套已知系列。请为它提出一个可复用的新分类，new_series 为 true，并填写 series（全大写英文，尽量简洁，例如 SANRIO、DISNEY、OTHER ART TOYS）、series_cn（中文名）和 is_popmart（true/false）。
+3. 新分类要能收纳同系列的其他照片，不要为单张照片造一个无法复用的名字。
+4. 如果完全无法辨认角色，series 返回 "UNKNOWN"，new_series 为 false。
 
 请只返回一个 JSON 对象，不要 Markdown、不要解释：
 {
-  "series": "上述系列之一或 UNKNOWN",
+  "series": "已知分类名或新分类英文名或 UNKNOWN",
+  "series_cn": "新分类中文名；已知分类可留空",
+  "new_series": false,
+  "is_popmart": true,
   "character": "角色/款式名，不确定可填空字符串",
   "title": "2 到 6 个中文字的圣诞或冬夜主题藏品名，不要照抄系列名",
   "confidence": 0.0 到 1.0 之间的数字,
   "reason": "一句话说明依据，20 字以内"
 }`;
+  }
 
   const AI_PRESETS = {
     local: {
@@ -118,6 +144,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
       remember: false,
       configured: false,
     },
+    customSeries: [],
     filters: { series: "all", rarity: "all", favourite: false },
     query: "",
     sort: "number",
@@ -166,6 +193,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     bindStaticEvents();
     loadFavourites();
     loadAiSettings();
+    loadCustomSeries();
 
     state.demo = Array.isArray(window.STELLAR_DATA) ? window.STELLAR_DATA.slice() : [];
 
@@ -1066,7 +1094,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
 
   function recordToItem(record) {
     if (!record || !record.thumbBlob || !record.fullBlob) return null;
-    const meta = findSeries(record.seriesKey) || SERIES.molly;
+    const meta = findSeries(record.seriesKey) || SERIES[OTHER_SERIES_KEY] || SERIES.molly;
     const thumb = URL.createObjectURL(record.thumbBlob);
     const src = URL.createObjectURL(record.fullBlob);
     state.objectUrls.add(thumb);
@@ -1106,6 +1134,164 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
       [result[i], result[j]] = [result[j], result[i]];
     }
     return result;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     series registry · built-in IPs + categories created by the archive
+     ══════════════════════════════════════════════════════════════════════ */
+
+  function hashString(value) {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i += 1) {
+      hash ^= value.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return hash >>> 0;
+  }
+
+  function flattenSeriesName(value) {
+    return String(value || "").toUpperCase().replace(/[^A-Z0-9\u4e00-\u9fff]+/g, "");
+  }
+
+  function resolveSeriesName(value) {
+    const raw = flattenSeriesName(value);
+    if (!raw || raw === "UNKNOWN" || raw === "未知") return null;
+    for (const key of SERIES_ORDER) {
+      const meta = SERIES[key];
+      const terms = [meta.key, meta.name, meta.cn, ...(meta.keywords || [])].map(flattenSeriesName).filter(Boolean);
+      if (terms.includes(raw)) return meta;
+    }
+    // Accept a model's slightly decorated but still unambiguous name, such as
+    // "LABUBU / THE MONSTERS". Never match the generic OTHER catch-all.
+    const contained = SERIES_ORDER
+      .map((key) => SERIES[key])
+      .filter((meta) => meta.key !== OTHER_SERIES_KEY)
+      .filter((meta) => {
+        const flat = flattenSeriesName(meta.name);
+        return flat.length >= 4 && raw.includes(flat);
+      })
+      .sort((a, b) => b.name.length - a.name.length);
+    return contained[0] || null;
+  }
+
+  function shadeHex(hex, factor) {
+    const clean = String(hex || "").replace("#", "");
+    if (!/^[0-9a-f]{6}$/i.test(clean)) return "#847768";
+    const parts = [0, 2, 4].map((offset) => clamp(Math.round(parseInt(clean.slice(offset, offset + 2), 16) * factor), 0, 255));
+    return `#${parts.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function uniqueSeriesKey(name) {
+    const base = String(name || "")
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9]+/g, "")
+      .toLowerCase();
+    let root = base || `new${hashString(String(name)).toString(36)}`;
+    let key = root;
+    let index = 2;
+    while (SERIES[key]) {
+      key = `${root}${index}`;
+      index += 1;
+    }
+    return key;
+  }
+
+  function makeCustomSeriesMeta(input = {}) {
+    const displayName = String(input.name || input.series || "NEW SERIES").trim().slice(0, 32) || "NEW SERIES";
+    const palette = ["#e8b1bd", "#dfbf8b", "#bdca9d", "#aacddb", "#c6b2dc", "#d6a7c9", "#d7b18f", "#9ec6bd", "#c8c2a5"];
+    const hues = [348, 42, 92, 198, 266, 315, 34, 170, 80];
+    const hash = hashString(displayName.toUpperCase()) % palette.length;
+    const accent = /^#[0-9a-f]{6}$/i.test(String(input.accent || "")) ? input.accent : palette[hash];
+    const key = uniqueSeriesKey(displayName);
+    const cn = String(input.cn || input.seriesCn || input.series_cn || displayName).trim().slice(0, 20) || displayName;
+    const collection = String(input.collection || "自由归档").trim().slice(0, 20) || "自由归档";
+    const collectionEn = String(input.collectionEn || "FREE ARCHIVE").trim().slice(0, 28) || "FREE ARCHIVE";
+    return {
+      key,
+      name: displayName.toUpperCase(),
+      cn,
+      collection,
+      collectionEn,
+      accent,
+      accentDim: shadeHex(accent, 0.64),
+      hue: Number.isFinite(Number(input.hue)) ? Number(input.hue) : hues[hash],
+      keywords: Array.from(new Set([displayName, cn, displayName.toLowerCase()].filter(Boolean))),
+      intro: String(input.intro || "由识藏室为还没有归处的藏品建立的分类。").slice(0, 90),
+      custom: true,
+      aiCreated: Boolean(input.aiCreated),
+      isPopmart: input.isPopmart !== false,
+      createdAt: input.createdAt || Date.now(),
+    };
+  }
+
+  function persistCustomSeries() {
+    try {
+      window.localStorage.setItem(CUSTOM_SERIES_KEY, JSON.stringify(state.customSeries.map((meta) => ({
+        key: meta.key,
+        name: meta.name,
+        cn: meta.cn,
+        collection: meta.collection,
+        collectionEn: meta.collectionEn,
+        accent: meta.accent,
+        hue: meta.hue,
+        intro: meta.intro,
+        isPopmart: meta.isPopmart,
+        aiCreated: meta.aiCreated,
+        createdAt: meta.createdAt,
+      }))));
+    } catch {
+      showToast("浏览器没有允许保存新分类。");
+    }
+  }
+
+  function loadCustomSeries() {
+    let saved = [];
+    try {
+      const parsed = JSON.parse(window.localStorage.getItem(CUSTOM_SERIES_KEY) || "[]");
+      if (Array.isArray(parsed)) saved = parsed;
+    } catch {
+      saved = [];
+    }
+    for (const record of saved) {
+      if (!record || !record.name) continue;
+      const existing = resolveSeriesName(record.name) || resolveSeriesName(record.cn);
+      if (existing) continue;
+      const meta = makeCustomSeriesMeta({
+        ...record,
+        name: record.name,
+        cn: record.cn || record.name,
+        aiCreated: record.aiCreated,
+        isPopmart: record.isPopmart,
+      });
+      // Keep the stored key stable if it is free; otherwise uniqueSeriesKey has
+      // already given us a safe alternative.
+      if (record.key && !SERIES[record.key] && /^[a-z0-9-]+$/.test(record.key)) {
+        meta.key = record.key;
+      }
+      SERIES[meta.key] = meta;
+      SERIES_ORDER.push(meta.key);
+      state.customSeries.push(meta);
+    }
+  }
+
+  function refreshSeriesSurfaces() {
+    renderFilters();
+    renderAtelierSeriesList();
+    updateCounts();
+  }
+
+  function createCustomSeries(input = {}) {
+    const inputName = String(input.name || input.series || "").trim();
+    if (!inputName) return null;
+    const existing = resolveSeriesName(inputName) || resolveSeriesName(input.cn || input.series_cn);
+    if (existing) return existing;
+    const meta = makeCustomSeriesMeta({ ...input, name: inputName, aiCreated: Boolean(input.aiCreated) });
+    SERIES[meta.key] = meta;
+    SERIES_ORDER.push(meta.key);
+    state.customSeries.push(meta);
+    persistCustomSeries();
+    refreshSeriesSurfaces();
+    return meta;
   }
 
   function loadFavourites() {
@@ -1168,16 +1354,19 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
 
   function updateCounts() {
     const total = state.items.length;
-    const series = new Set(state.items.map((item) => item.seriesKey));
     const rare = state.items.filter((item) => item.rarity === "隐藏款" || item.rarity === "限定款").length;
     el.navCount.textContent = total;
     el.heroCount.textContent = total;
-    el.heroSeriesCount.textContent = series.size || SERIES_ORDER.length;
+    el.heroSeriesCount.textContent = SERIES_ORDER.length;
     el.collectionCount.textContent = total;
-    el.collectionSeries.textContent = series.size || SERIES_ORDER.length;
+    el.collectionSeries.textContent = SERIES_ORDER.length;
     el.collectionRare.textContent = rare;
     el.resultCount.textContent = state.filteredItems.length;
     el.favCount.textContent = state.favourites.size;
+    const seriesLabel = document.getElementById("seriesTotalLabel");
+    if (seriesLabel) seriesLabel.textContent = `SERIES · ${SERIES_ORDER.length}`;
+    const atelierSeriesTotal = document.getElementById("atelierSeriesTotal");
+    if (atelierSeriesTotal) atelierSeriesTotal.textContent = `${SERIES_ORDER.length} SERIES`;
   }
 
   function renderFilters() {
@@ -1192,12 +1381,13 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     ];
     for (const key of SERIES_ORDER) {
       const meta = SERIES[key];
+      const count = counts[key] || 0;
       seriesButtons.push(`
-        <button class="filter-option" type="button" data-series-filter="${key}" style="--accent:${meta.accent}" aria-pressed="false">
+        <button class="filter-option${count ? "" : " filter-option--empty"}${meta.custom ? " filter-option--custom" : ""}" type="button" data-series-filter="${key}" style="--accent:${meta.accent}" aria-pressed="false" title="${count ? `${escapeHTML(meta.name)} · ${escapeHTML(meta.cn)}` : "还没有藏品；导入后会自动归入这个分类"}">
           <span class="filter-option__dot" aria-hidden="true"></span>
           <span class="filter-option__label">${escapeHTML(meta.name)}</span>
           <span class="filter-option__cn">${escapeHTML(meta.cn)}</span>
-          <span class="filter-option__count">${counts[key] || 0}</span>
+          <span class="filter-option__count">${count || "待"}</span>
         </button>`);
     }
     el.seriesFilters.innerHTML = seriesButtons.join("");
@@ -1246,7 +1436,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     const counts = seriesCounts();
     el.atelierSeriesList.innerHTML = SERIES_ORDER.map((key) => {
       const meta = SERIES[key];
-      return `<span class="mini-series__item" style="--accent:${meta.accent}">
+      return `<span class="mini-series__item${meta.custom ? " is-custom" : ""}" style="--accent:${meta.accent}" title="${escapeHTML(meta.cn)}">
         <i aria-hidden="true"></i><span>${escapeHTML(meta.name)}</span><b>${counts[key] || 0}</b>
       </span>`;
     }).join("");
@@ -2003,23 +2193,8 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
   }
 
   function normalizeAiSeries(value) {
-    const raw = String(value || "").toUpperCase().replace(/[\s_-]+/g, "");
-    if (!raw || raw === "UNKNOWN") return null;
-    const aliases = {
-      SWEETBEAN: "sweetbean",
-      SKULLPANDA: "skullpanda",
-      "骷髅熊猫": "skullpanda",
-      MOLLY: "molly",
-      DIMOO: "dimoo",
-      LABUBU: "labubu",
-      HIRONO: "hirono",
-      CRYBABY: "crybaby",
-      PUCKY: "pucky",
-      NYOTA: "nyota",
-      ZIMOMO: "zimomo",
-    };
-    if (aliases[raw]) return aliases[raw];
-    return SERIES_ORDER.find((key) => SERIES[key].keywords.some((keyword) => raw.includes(keyword.toUpperCase().replace(/[\s_-]+/g, "")))) || null;
+    const meta = resolveSeriesName(value);
+    return meta ? meta.key : null;
   }
 
   async function classifyWithAi(previewUrl) {
@@ -2045,7 +2220,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
             {
               role: "user",
               content: [
-                { type: "text", text: AI_PROMPT },
+                { type: "text", text: buildAiPrompt() },
                 { type: "image_url", image_url: { url: dataUrl } },
               ],
             },
@@ -2082,10 +2257,29 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     } catch {
       throw new Error("AI 返回 JSON 解析失败");
     }
-    const seriesKey = normalizeAiSeries(parsed.series);
-    if (!seriesKey) return null;
+    const known = resolveSeriesName(parsed.series);
+    const rawName = String(parsed.series || "").trim();
+    const unknownName = !rawName || /^(UNKNOWN|未知|N\/A|无)$/i.test(rawName);
+    let newSeries = null;
+    if (!known && !unknownName) {
+      // The AI is explicitly authorized to open a new, reusable category when
+      // the plate is not one of the built-in Pop Mart families.
+      newSeries = {
+        name: rawName,
+        cn: typeof parsed.series_cn === "string" ? parsed.series_cn.trim().slice(0, 20) : "",
+        collection: "自由归档",
+        collectionEn: "FREE ARCHIVE",
+        isPopmart: parsed.is_popmart !== false,
+        aiCreated: true,
+        intro: typeof parsed.reason === "string" && parsed.reason.trim()
+          ? `由 AI 识藏建立：${parsed.reason.trim().slice(0, 40)}`
+          : "由识藏室为还没有归处的藏品建立的分类。",
+      };
+    }
+    if (!known && !newSeries) return null;
     return {
-      seriesKey,
+      seriesKey: known ? known.key : null,
+      newSeries,
       title: typeof parsed.title === "string" ? parsed.title.trim().slice(0, 12) : "",
       character: typeof parsed.character === "string" ? parsed.character.trim().slice(0, 32) : "",
       reason: typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 60) : "",
@@ -2177,7 +2371,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
       result.manual = true;
       result.confidence = 1;
       const card = select.closest(".result-card");
-      const meta = findSeries(select.value) || SERIES.molly;
+      const meta = findSeries(select.value) || SERIES[OTHER_SERIES_KEY] || SERIES.molly;
       const label = $(".result-card__series-label", card);
       const confidence = $(".result-card__confidence", card);
       const track = $(".result-card__confidence-track b", card);
@@ -2298,7 +2492,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     const image = await loadImage(previewUrl);
     const features = analysePixels(image);
     features.extraSeed = file.size || 0;
-    const localMatch = classifyByName(file.name) || classifyByColour(features);
+    const localMatch = classifyByName(file.name) || classifyBrandHint(file.name) || classifyByColour(features);
     let aiResult = null;
     let aiAttempted = false;
     let aiError = "";
@@ -2311,8 +2505,17 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
         aiError = error?.message || "AI 接口失败";
       }
     }
-    const aiMeta = aiResult ? findSeries(aiResult.seriesKey) : null;
-    const meta = aiMeta || localMatch.meta;
+    let aiMeta = null;
+    if (aiResult?.newSeries) {
+      aiMeta = createCustomSeries({ ...aiResult.newSeries, aiCreated: true });
+    } else if (aiResult?.seriesKey) {
+      aiMeta = findSeries(aiResult.seriesKey);
+    }
+    let localMeta = localMatch.meta;
+    if (!localMeta && localMatch.customSeries) {
+      localMeta = createCustomSeries({ ...localMatch.customSeries, aiCreated: false });
+    }
+    const meta = aiMeta || localMeta || findSeries(OTHER_SERIES_KEY) || SERIES.molly;
     const thumbBlob = await resizeToBlob(image, 500, 625, 0.84);
     const fullBlob = await resizeToBlob(image, 1400, 1750, 0.88);
     if (!thumbBlob || !fullBlob) throw new Error("Could not encode image");
@@ -2332,9 +2535,9 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
       createdAt: Date.now(),
       demo: false,
       aiAttempted,
-      aiUsed: Boolean(aiResult),
-      aiError,
-      engine: aiResult ? AI_PRESETS[state.ai.provider].label : "本地识别",
+      aiUsed: Boolean(aiMeta),
+      aiError: aiAttempted && !aiMeta ? (aiError || "模型没有辨认出系列") : aiError,
+      engine: aiResult ? AI_PRESETS[state.ai.provider].label : (localMatch.customSeries ? "本地主色新分类" : "本地识别"),
       engineShort: aiResult
         ? state.ai.provider === "doubao"
           ? "豆包 AI"
@@ -2443,21 +2646,92 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     return null;
   }
 
-  function classifyByColour(features) {
-    let best = SERIES_ORDER[0];
-    let bestScore = -1;
-    for (const key of SERIES_ORDER) {
-      const meta = SERIES[key];
-      const distance = hueDistance(features.hue, meta.hue);
-      const closeness = 1 - distance / 180;
-      const score = closeness * (0.65 + features.saturation * 0.35);
-      if (score > bestScore) {
-        bestScore = score;
-        best = key;
-      }
+  const LOCAL_BRAND_HINTS = [
+    {
+      tokens: ["sanrio", "hellokitty", "hello kitty", "三丽鸥", "凯蒂猫"],
+      name: "SANRIO",
+      cn: "三丽鸥",
+      accent: "#f3b6c8",
+      hue: 345,
+      intro: "本地按文件名识别出的联名收藏。",
+    },
+    {
+      tokens: ["disney", "mickey", "迪士尼", "米奇", "米妮"],
+      name: "DISNEY",
+      cn: "迪士尼",
+      accent: "#9dc7e8",
+      hue: 210,
+      intro: "本地按文件名识别出的联名收藏。",
+    },
+    {
+      tokens: ["sonnyangel", "sonny angel", "丘比天使"],
+      name: "SONNY ANGEL",
+      cn: "丘比天使",
+      accent: "#e6d0b1",
+      hue: 35,
+      intro: "本地按文件名识别出的潮玩分类。",
+    },
+    {
+      tokens: ["bearbrick", "be@rbrick", "积木熊"],
+      name: "BE@RBRICK",
+      cn: "积木熊",
+      accent: "#d9c2a2",
+      hue: 34,
+      intro: "本地按文件名识别出的潮玩分类。",
+    },
+  ];
+
+  function classifyBrandHint(filename) {
+    const normalized = String(filename || "").toLowerCase().replace(/[-_\s.]/g, "");
+    if (!normalized) return null;
+    for (const hint of LOCAL_BRAND_HINTS) {
+      if (!hint.name) continue;
+      const matched = hint.tokens.some((token) => normalized.includes(token.toLowerCase().replace(/[-_\s.]/g, "")));
+      if (!matched) continue;
+      return {
+        meta: null,
+        customSeries: {
+          name: hint.name,
+          cn: hint.cn,
+          collection: "联名档案",
+          collectionEn: "COLLAB ARCHIVE",
+          accent: hint.accent,
+          hue: hint.hue,
+          intro: hint.intro,
+          isPopmart: false,
+        },
+        confidence: 0.76,
+        fromName: true,
+      };
     }
-    const confidence = clamp(0.49 + bestScore * 0.35, 0.49, 0.86);
-    return { meta: SERIES[best], confidence, fromName: false };
+    return null;
+  }
+
+  function classifyByColour(features) {
+    // No filename or brand clue: do not pretend a colour match is a certain
+    // artist IP. The local engine opens a reusable colour family instead, and
+    // the AI can later replace it with a more precise brand/category.
+    const family = COLOUR_FAMILIES.reduce((closest, candidate) => (
+      hueDistance(features.hue, candidate.hue) < hueDistance(features.hue, closest.hue)
+        ? candidate
+        : closest
+    ), COLOUR_FAMILIES[0]);
+    return {
+      meta: null,
+      customSeries: {
+        name: family.name,
+        cn: family.cn,
+        collection: family.collection,
+        collectionEn: family.collectionEn,
+        accent: family.accent,
+        hue: family.hue,
+        intro: family.intro,
+        isPopmart: false,
+      },
+      confidence: clamp(0.46 + features.saturation * 0.09, 0.46, 0.58),
+      fromName: false,
+      localFallback: true,
+    };
   }
 
   function hueDistance(a, b) {
@@ -2514,7 +2788,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
 
   function renderIdentifyResults() {
     el.resultGrid.innerHTML = state.pendingResults.map((result, index) => {
-      const meta = findSeries(result.seriesKey) || SERIES.molly;
+      const meta = findSeries(result.seriesKey) || SERIES[OTHER_SERIES_KEY] || SERIES.molly;
       return `
         <article class="result-card" style="animation-delay:${index * 45}ms">
           <div class="result-card__image"><img src="${result.previewUrl}" alt="待入藏照片 ${index + 1}"></div>
@@ -2548,7 +2822,7 @@ MOLLY, DIMOO, SKULLPANDA, LABUBU, HIRONO, CRYBABY, SWEET BEAN, PUCKY, NYOTA, ZIM
     let inserted = 0;
 
     for (const [index, result] of state.pendingResults.entries()) {
-      const meta = findSeries(result.seriesKey) || SERIES.molly;
+      const meta = findSeries(result.seriesKey) || SERIES[OTHER_SERIES_KEY] || SERIES.molly;
       state.customSequence += 1;
       const id = `MY-${Date.now().toString(36)}-${index}-${Math.random().toString(36).slice(2, 6)}`;
       const no = `C${String(state.customSequence).padStart(3, "0")}`;

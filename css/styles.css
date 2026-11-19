@@ -1581,6 +1581,42 @@ img {
   flex-direction: column;
   gap: 2px;
 }
+#seriesFilters {
+  max-height: 392px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(231, 194, 147, 0.22) transparent;
+}
+#seriesFilters::-webkit-scrollbar {
+  width: 3px;
+}
+#seriesFilters::-webkit-scrollbar-thumb {
+  background: rgba(231, 194, 147, 0.22);
+  border-radius: 4px;
+}
+.filter-option--empty {
+  opacity: 0.52;
+}
+.filter-option--empty:hover,
+.filter-option--empty.is-active {
+  opacity: 1;
+}
+.filter-option--custom .filter-option__label::after {
+  content: "NEW";
+  margin-left: 5px;
+  color: rgba(231, 194, 147, 0.34);
+  font-size: 5px;
+  letter-spacing: 0.1em;
+  vertical-align: super;
+}
+.filter-hint {
+  margin: 10px 0 0;
+  color: rgba(217, 200, 183, 0.24);
+  font-size: 6px;
+  letter-spacing: 0.04em;
+  line-height: 1.75;
+}
 .filter-option {
   position: relative;
   display: flex;
@@ -2912,6 +2948,24 @@ img {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px 12px;
+  max-height: 390px;
+  overflow-y: auto;
+  padding-right: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(231, 194, 147, 0.2) transparent;
+}
+.mini-series::-webkit-scrollbar {
+  width: 3px;
+}
+.mini-series::-webkit-scrollbar-thumb {
+  background: rgba(231, 194, 147, 0.2);
+  border-radius: 4px;
+}
+.mini-series__item.is-custom {
+  color: rgba(231, 194, 147, 0.66);
+}
+.mini-series__item.is-custom b {
+  color: var(--gold-deep);
 }
 .mini-series__item {
   display: flex;
@@ -4061,6 +4115,12 @@ img {
     padding-bottom: 2px;
     scrollbar-width: none;
   }
+  #seriesFilters {
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-right: 0;
+  }
   .filter-list::-webkit-scrollbar {
     display: none;
   }
@@ -5059,7 +5119,7 @@ body.viewer-open .view {
 }
 .tree-view__bg {
   background:
-    radial-gradient(ellipse 46% 62% at 66% 42%, rgba(31, 72, 52, 0.30) 0%, rgba(19, 45, 34, 0.08) 46%, transparent 68%),
+    radial-gradient(ellipse 42% 58% at 66% 44%, rgba(44, 92, 63, 0.34) 0%, rgba(22, 55, 39, 0.11) 47%, transparent 69%),
     radial-gradient(ellipse 52% 54% at 34% 26%, rgba(123, 38, 55, 0.23) 0%, transparent 62%),
     radial-gradient(ellipse 48% 36% at 60% 92%, rgba(87, 29, 43, 0.18), transparent 72%),
     linear-gradient(165deg, #0d0708 0%, #070504 54%, #040302 100%);
@@ -5111,8 +5171,8 @@ body.viewer-open .view {
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background:
-    radial-gradient(circle, rgba(245, 215, 173, 0.17) 0%, rgba(191, 132, 92, 0.08) 31%, rgba(62, 79, 63, 0.05) 55%, transparent 72%);
-  filter: blur(20px);
+    radial-gradient(circle, rgba(247, 219, 177, 0.22) 0%, rgba(113, 145, 103, 0.12) 34%, rgba(58, 103, 70, 0.07) 57%, transparent 73%);
+  filter: blur(22px);
   pointer-events: none;
 }
 .tree-stage__halo::before,
@@ -5308,10 +5368,10 @@ body.viewer-open .view {
 
 .tree-sculpture {
   position: absolute;
-  top: 51.5%;
+  top: 50.5%;
   left: 65.5%;
   z-index: 6;
-  width: min(36.5vw, 500px);
+  width: min(34.5vw, 480px);
   transform: translate(-50%, -50%);
   pointer-events: none;
   animation: sculptureFloat 9s ease-in-out infinite;
@@ -5320,9 +5380,9 @@ body.viewer-open .view {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 640 / 860;
+  aspect-ratio: 1200 / 1700;
   pointer-events: none;
-  filter: drop-shadow(0 34px 45px rgba(0, 0, 0, 0.42));
+  filter: brightness(1.14) saturate(1.05) drop-shadow(0 34px 45px rgba(0, 0, 0, 0.48));
 }
 .tree-sculpture::after {
   content: "";
@@ -5360,14 +5420,14 @@ body.viewer-open .view {
 }
 .tree-sculpture__base {
   position: absolute;
-  bottom: 3%;
+  bottom: 1.8%;
   left: 50%;
-  width: 47%;
-  height: 5%;
+  width: 52%;
+  height: 6.5%;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: rgba(247, 209, 164, 0.15);
-  filter: blur(13px);
+  background: radial-gradient(ellipse, rgba(1, 7, 4, 0.78) 0%, rgba(8, 20, 13, 0.4) 55%, transparent 76%);
+  filter: blur(9px);
 }
 @keyframes sculptureFloat {
   0%, 100% { transform: translate(-50%, -50%) translateY(0); }

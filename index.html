@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="200 件泡泡玛特藏品在层叠圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；识藏室可选接入豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
+  <meta name="description" content="200 件泡泡玛特藏品在写实常青圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室可选接入豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0a0507">
   <meta name="color-scheme" content="dark">
@@ -12,21 +12,21 @@
   <meta property="og:locale" content="zh_CN">
   <meta property="og:site_name" content="星屿藏馆 · STELLAR ARCHIVE">
   <meta property="og:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta property="og:description" content="200 件泡泡玛特藏品在层叠圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；识藏室可选接入豆包等视觉 API。">
+  <meta property="og:description" content="200 件泡泡玛特藏品在写实常青圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室可选接入豆包等视觉 API。">
   <meta property="og:url" content="https://ac1314-520.github.io/stellar-archive/">
   <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="星屿藏馆：层叠圣诞树与环绕旋转的泡泡玛特藏品照片">
+  <meta property="og:image:alt" content="星屿藏馆：写实常青圣诞树与环绕旋转的泡泡玛特藏品照片">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta name="twitter:description" content="200 件泡泡玛特藏品在层叠圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；识藏室可选接入豆包等视觉 API。">
+  <meta name="twitter:description" content="200 件泡泡玛特藏品在写实常青圣诞树旁逐幕流转，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室可选接入豆包等视觉 API。">
   <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <title>星屿藏馆 · 泡泡玛特圣诞电子藏品馆</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="assets/tree-noel.svg" as="image" type="image/svg+xml">
+  <link rel="preload" href="assets/tree-noel.webp" as="image" type="image/webp">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -110,7 +110,7 @@
         <div class="tree-stage__floor" aria-hidden="true"></div>
         <div class="tree-sculpture" id="treeSculpture" aria-hidden="true">
           <div class="tree-sculpture__aura"></div>
-          <img src="assets/tree-noel.svg" alt="" draggable="false">
+          <img src="assets/tree-noel.webp" alt="" draggable="false">
           <div class="tree-sculpture__base"></div>
         </div>
         <div class="tree-stage__shield" id="treeShield" aria-hidden="true"></div>
@@ -145,7 +145,7 @@
             <span>件藏品 <em>PIECES</em></span>
           </div>
           <div class="hero__stat">
-            <strong id="heroSeriesCount">10</strong>
+            <strong id="heroSeriesCount">27</strong>
             <span>个系列 <em>SERIES</em></span>
           </div>
           <div class="hero__stat">
@@ -246,7 +246,7 @@
           </div>
           <div class="collection-stats">
             <div><strong id="collectionCount">200</strong><span>件馆藏</span></div>
-            <div><strong id="collectionSeries">10</strong><span>个系列</span></div>
+            <div><strong id="collectionSeries">27</strong><span>个系列</span></div>
             <div><strong id="collectionRare">—</strong><span>件特别款</span></div>
             <div class="collection-stats__note"><span>全部藏品均为本地保存</span><span>AI 识藏可选接入</span></div>
           </div>
@@ -256,10 +256,11 @@
           <aside class="filter-rail" aria-label="筛选藏品">
             <div class="filter-block">
               <div class="filter-block__head">
-                <span>按系列 <em>SERIES</em></span>
+                <span>按系列 <em id="seriesTotalLabel">SERIES · 27</em></span>
                 <button type="button" id="resetFilters">重置</button>
               </div>
               <div class="filter-list" id="seriesFilters"></div>
+              <p class="filter-hint">全部 IP 已开放；标注「待」的分类会收纳之后识别到的同类藏品。</p>
             </div>
             <div class="filter-block">
               <div class="filter-block__head">
@@ -433,7 +434,7 @@
             <div class="atelier-card atelier-card--series">
               <div class="aside-kicker-row">
                 <p class="aside-kicker">SERIES INDEX</p>
-                <span>10 SERIES</span>
+                <span id="atelierSeriesTotal">27 SERIES</span>
               </div>
               <div class="mini-series" id="atelierSeriesList"></div>
             </div>
@@ -513,7 +514,7 @@
           <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI</a>
         </div>
 
-        <p class="ai-drawer__fineprint">Key 与所选照片会从你的浏览器直接发送给你选择的 AI 服务商，不会经过本页面服务器，也不会出现在 GitHub 源码里。公开设备上不建议勾选“记住”。免费额度和模型可用性以服务商控制台为准。</p>
+        <p class="ai-drawer__fineprint">Key 与所选照片会从你的浏览器直接发送给你选择的 AI 服务商，不会经过本页面服务器，也不会出现在 GitHub 源码里。公开设备上不建议勾选“记住”。免费额度和模型可用性以服务商控制台为准。<br><br>本地引擎与 AI 都被允许在照片无法归入现有分类时建立新的分类；新分类会写入本机，并立即出现在藏馆的系列筛选里。你仍可在识别结果中改回任意已有系列。</p>
 
         <div class="ai-form__foot">
           <button class="btn btn--gold btn--small" type="submit" id="aiSave">保存并启用</button>

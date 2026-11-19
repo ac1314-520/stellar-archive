@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="200 件泡泡玛特藏品围绕圣诞星树漂浮，点击照片可拖拽 360° 欣赏。星屿藏馆 · STELLAR ARCHIVE。">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a0507">
+  <meta name="color-scheme" content="dark">
+  <link rel="canonical" href="https://ac1314-520.github.io/stellar-archive/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:site_name" content="星屿藏馆 · STELLAR ARCHIVE">
+  <meta property="og:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
+  <meta property="og:description" content="200 件泡泡玛特藏品围绕圣诞星树漂浮，点击照片可拖拽 360° 欣赏。">
+  <meta property="og:url" content="https://ac1314-520.github.io/stellar-archive/">
+  <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="星屿藏馆：发光圣诞星树与环绕漂浮的泡泡玛特藏品">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
+  <meta name="twitter:description" content="200 件泡泡玛特藏品围绕圣诞星树漂浮，点击照片可拖拽 360° 欣赏。">
+  <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
+  <title>星屿藏馆 · 泡泡玛特圣诞电子藏品馆</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
+  <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#collection">跳到藏品馆</a>
+
+  <div class="preloader" id="preloader" role="status" aria-live="polite">
+    <div class="preloader__noise"></div>
+    <div class="preloader__inner">
+      <div class="preloader__star" aria-hidden="true">
+        <span></span><span></span><i></i>
+      </div>
+      <p class="preloader__kicker">STELLAR ARCHIVE <span>·</span> NOËL 2026</p>
+      <h1 class="preloader__title">正在点亮星树</h1>
+      <div class="preloader__track"><span id="loadBar"></span></div>
+      <div class="preloader__meta">
+        <span id="loadStatus">正在挂上第一件藏品</span>
+        <span><em id="loadPercent">00</em> / <span id="loadTotal">200</span></span>
+      </div>
+    </div>
+    <p class="preloader__foot">A PRIVATE WINTER EXHIBITION</p>
+  </div>
+
+  <div class="grain" aria-hidden="true"></div>
+  <div class="page-ambient" aria-hidden="true"></div>
+
+  <header class="topbar" id="topbar">
+    <a class="brand" href="#tree" data-route="tree" aria-label="星屿藏馆首页">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32"><path d="M16 2.8c.7 6.6 4.8 10.7 11.4 11.4C20.8 14.9 16.7 19 16 25.6 15.3 19 11.2 14.9 4.6 14.2 11.2 13.5 15.3 9.4 16 2.8Z"/></svg>
+      </span>
+      <span class="brand__type">
+        <strong>星屿藏馆</strong>
+        <small>STELLAR ARCHIVE</small>
+      </span>
+    </a>
+
+    <div class="topbar__exhibit">
+      <span class="topbar__rule" aria-hidden="true"></span>
+      <em>NOËL 2026</em>
+      <span>泡泡玛特私人藏品展</span>
+      <span class="topbar__dot" aria-hidden="true"></span>
+      <span class="topbar__live"><i></i> ON VIEW</span>
+    </div>
+
+    <nav class="topnav" aria-label="馆内导航">
+      <button class="topnav__item is-active" type="button" data-route="tree">
+        <span>星树</span><small>THE TREE</small>
+      </button>
+      <button class="topnav__item" type="button" data-route="collection">
+        <span>藏馆</span><small>COLLECTION</small>
+      </button>
+      <button class="topnav__item" type="button" data-route="atelier">
+        <span>识藏</span><small>ATELIER</small>
+      </button>
+    </nav>
+
+    <div class="topbar__right">
+      <div class="archive-count" title="馆藏总数">
+        <strong id="navCount">200</strong>
+        <span>件入藏</span>
+      </div>
+      <button class="round-btn topbar__enter" type="button" data-route="collection" aria-label="进入藏品馆">
+        <span>进入藏馆</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5 15.5 10 11 14.5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- ══════════════════════════ 01 · THE TREE ══════════════════════════ -->
+    <section class="view tree-view is-active" id="treeView" data-view="tree" aria-labelledby="treeTitle">
+      <div class="tree-view__bg" aria-hidden="true"></div>
+      <canvas id="treeCanvas" aria-label="两百件藏品围绕着发光的圣诞树缓慢旋转。点击照片可以放大欣赏。"></canvas>
+      <div class="tree-view__vignette" aria-hidden="true"></div>
+      <div class="tree-view__bloom" aria-hidden="true"></div>
+
+      <div class="hero">
+        <p class="eyebrow hero__eyebrow">
+          <span class="eyebrow__index">CHAPTER 01</span>
+          <span class="eyebrow__line" aria-hidden="true"></span>
+          <span>THE CHRISTMAS TREE</span>
+        </p>
+        <h1 class="hero__title" id="treeTitle">
+          <span class="hero__title-kicker">A WINTER</span>
+          <span class="hero__title-cn">圣诞星屿</span>
+          <span class="hero__title-en">Noël Archive</span>
+        </h1>
+        <p class="hero__lede">
+          两百件小小藏品，围绕一棵不熄的星树。<br>
+          今年冬天，把喜欢都挂在高处。
+        </p>
+        <p class="hero__mobile-hint"><span aria-hidden="true">✦</span> 轻点任意照片 · 360° 欣赏</p>
+        <div class="hero__meta">
+          <div class="hero__stat">
+            <strong id="heroCount">200</strong>
+            <span>件藏品 <em>PIECES</em></span>
+          </div>
+          <div class="hero__stat">
+            <strong id="heroSeriesCount">10</strong>
+            <span>个系列 <em>SERIES</em></span>
+          </div>
+          <div class="hero__stat">
+            <strong>2026</strong>
+            <span>圣诞特展 <em>WINTER</em></span>
+          </div>
+        </div>
+        <div class="hero__actions">
+          <button class="btn btn--gold" type="button" data-route="collection">
+            <span>进入藏品馆</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5 15.5 10 11 14.5"/></svg>
+          </button>
+          <button class="btn btn--line" type="button" data-route="atelier">
+            <span>让 AI 识藏</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <aside class="series-rail" aria-label="系列索引">
+        <div class="series-rail__head">
+          <span>STAR INDEX</span>
+          <em>系列索引</em>
+        </div>
+        <div class="series-rail__list" id="treeSeriesList"></div>
+        <button class="series-rail__clear" id="clearTreeFocus" type="button" hidden>显示全部星层 <span>×</span></button>
+        <p class="series-rail__note">选择系列，让星光只落在它身上</p>
+      </aside>
+
+      <div class="tree-meta" aria-hidden="true">
+        <span>ORBITAL VIEW</span>
+        <span class="tree-meta__line"></span>
+        <span>200 PIECES</span>
+      </div>
+
+      <div class="photo-tip" id="photoTip" aria-hidden="true">
+        <span class="photo-tip__line"></span>
+        <span class="photo-tip__no" id="photoTipNo">NO. 001</span>
+        <span class="photo-tip__name" id="photoTipName">月桂星愿</span>
+        <span class="photo-tip__series" id="photoTipSeries">MOLLY</span>
+      </div>
+
+      <div class="tree-dock" id="treeDock">
+        <div class="tree-dock__group">
+          <button class="dock-btn" id="orbitToggle" type="button" aria-pressed="true" title="暂停 / 继续星轨">
+            <span class="dock-btn__icon" id="orbitIcon">Ⅱ</span>
+            <span class="dock-btn__label">暂停环游</span>
+          </button>
+          <button class="dock-btn" id="resetView" type="button" title="回到初始视角">
+            <span class="dock-btn__icon">↺</span>
+            <span class="dock-btn__label">复位视角</span>
+          </button>
+        </div>
+        <div class="tree-dock__center">
+          <span class="tree-dock__pulse" aria-hidden="true"></span>
+          <p>拖动旋转 · 滚轮缩放 · 点击照片欣赏</p>
+        </div>
+        <div class="tree-dock__group tree-dock__group--right">
+          <button class="dock-btn" id="zoomOut" type="button" title="拉远">
+            <span class="dock-btn__icon">−</span>
+            <span class="dock-btn__label">远观</span>
+          </button>
+          <button class="dock-btn" id="zoomIn" type="button" title="靠近">
+            <span class="dock-btn__icon">+</span>
+            <span class="dock-btn__label">近赏</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="tree-caption" aria-hidden="true">
+        <span>STELLAR ARCHIVE</span>
+        <i></i>
+        <span>MMXXVI</span>
+      </div>
+
+      <div class="tree-fallback" id="treeFallback" hidden>
+        <p>当前浏览器无法启用 3D 星树。</p>
+        <button class="btn btn--gold" type="button" data-route="collection">直接进入藏品馆</button>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ 02 · COLLECTION ══════════════════════════ -->
+    <section class="view collection-view" id="collectionView" data-view="collection" aria-labelledby="collectionTitle" hidden>
+      <div class="collection-view__wash" aria-hidden="true"></div>
+
+      <div class="collection-shell">
+        <header class="collection-head">
+          <p class="eyebrow">
+            <span class="eyebrow__index">CHAPTER 02</span>
+            <span class="eyebrow__line" aria-hidden="true"></span>
+            <span>THE COLLECTION</span>
+          </p>
+          <div class="collection-head__row">
+            <h2 id="collectionTitle">藏 品 馆</h2>
+            <div class="collection-head__aside">
+              <p>每一件喜欢，都值得被认真陈列。</p>
+              <em>Every little love, properly kept.</em>
+            </div>
+          </div>
+          <div class="collection-head__rule">
+            <span>THE WINTER ARCHIVE</span>
+            <i></i>
+            <span>2026 · SHANGHAI</span>
+          </div>
+          <div class="collection-stats">
+            <div><strong id="collectionCount">200</strong><span>件馆藏</span></div>
+            <div><strong id="collectionSeries">10</strong><span>个系列</span></div>
+            <div><strong id="collectionRare">—</strong><span>件特别款</span></div>
+            <div class="collection-stats__note"><span>全部藏品均为本地保存</span><span>AI 识藏已开启</span></div>
+          </div>
+        </header>
+
+        <div class="collection-body">
+          <aside class="filter-rail" aria-label="筛选藏品">
+            <div class="filter-block">
+              <div class="filter-block__head">
+                <span>按系列 <em>SERIES</em></span>
+                <button type="button" id="resetFilters">重置</button>
+              </div>
+              <div class="filter-list" id="seriesFilters"></div>
+            </div>
+            <div class="filter-block">
+              <div class="filter-block__head">
+                <span>按稀有度 <em>EDITION</em></span>
+              </div>
+              <div class="filter-list filter-list--small" id="rarityFilters"></div>
+            </div>
+            <div class="filter-block filter-block--keepsake">
+              <div class="filter-block__head">
+                <span>我的珍藏 <em>FAVOURITES</em></span>
+              </div>
+              <button class="keepsake-link" id="filterFavourite" type="button">
+                <span>只看我收藏的</span><b id="favCount">0</b>
+              </button>
+            </div>
+            <div class="rail-card">
+              <span class="rail-card__star" aria-hidden="true">✦</span>
+              <p>新照片还在手机里？</p>
+              <h3>让 AI 替你<br>识别与归档。</h3>
+              <button type="button" data-route="atelier">打开识藏室 <span>→</span></button>
+            </div>
+            <p class="rail-foot">STELLAR ARCHIVE<br>CATALOGUE NO. 01</p>
+          </aside>
+
+          <div class="collection-main">
+            <div class="collection-toolbar">
+              <label class="search-field">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg>
+                <input id="searchInput" type="search" placeholder="搜索角色、系列或藏品名" autocomplete="off" aria-label="搜索藏品">
+                <kbd>/</kbd>
+              </label>
+              <div class="toolbar-meta">
+                <span><b id="resultCount">200</b> 件展品</span>
+                <span class="toolbar-meta__divider"></span>
+                <label class="sort-select">
+                  <span>排序</span>
+                  <select id="sortSelect" aria-label="藏品排序方式">
+                    <option value="number">按入藏编号</option>
+                    <option value="series">按系列</option>
+                    <option value="title">按藏品名</option>
+                    <option value="date">按入藏日期</option>
+                  </select>
+                  <svg viewBox="0 0 12 8" aria-hidden="true"><path d="m1 1.5 5 5 5-5"/></svg>
+                </label>
+              </div>
+            </div>
+
+            <div class="active-filters" id="activeFilters" hidden></div>
+            <div class="collection-grid" id="collectionGrid" aria-live="polite"></div>
+            <div class="empty-state" id="emptyState" hidden>
+              <span aria-hidden="true">✦</span>
+              <h3>这一层，暂时没有藏品。</h3>
+              <p>换个系列、清除筛选，或去识藏室放入一张新照片。</p>
+              <button class="btn btn--gold" type="button" id="emptyReset">显示全部藏品</button>
+            </div>
+            <footer class="collection-foot">
+              <span>END OF THE WINTER CATALOGUE</span>
+              <i aria-hidden="true">✦</i>
+              <span class="collection-foot__unofficial">UNOFFICIAL FAN ARCHIVE · 非官方粉丝作品</span>
+              <button type="button" data-scroll-top>回到顶部 ↑</button>
+            </footer>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════ 03 · ATELIER ══════════════════════════ -->
+    <section class="view atelier-view" id="atelierView" data-view="atelier" aria-labelledby="atelierTitle" hidden>
+      <div class="atelier-view__wash" aria-hidden="true"></div>
+      <div class="atelier-shell">
+        <header class="atelier-head">
+          <p class="eyebrow">
+            <span class="eyebrow__index">CHAPTER 03</span>
+            <span class="eyebrow__line" aria-hidden="true"></span>
+            <span>THE AI ATELIER</span>
+          </p>
+          <div class="atelier-head__row">
+            <h2 id="atelierTitle">识 藏 室</h2>
+            <p>把照片放进光里。<br><em>识别角色，归档系列，然后入馆。</em></p>
+          </div>
+        </header>
+
+        <div class="atelier-layout">
+          <section class="atelier-workbench" aria-label="照片识别工作台">
+            <div class="workbench-head">
+              <div>
+                <span class="workbench-head__index">01</span>
+                <h3>放入你的泡泡玛特照片</h3>
+              </div>
+              <span class="local-badge"><i></i>本地识别 · 不上传</span>
+            </div>
+
+            <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="选择或拖拽照片到此处">
+              <input type="file" id="fileInput" accept="image/*" multiple hidden>
+              <div class="dropzone__corner dropzone__corner--tl" aria-hidden="true"></div>
+              <div class="dropzone__corner dropzone__corner--tr" aria-hidden="true"></div>
+              <div class="dropzone__corner dropzone__corner--bl" aria-hidden="true"></div>
+              <div class="dropzone__corner dropzone__corner--br" aria-hidden="true"></div>
+              <div class="dropzone__inner">
+                <div class="dropzone__orb" aria-hidden="true">
+                  <span class="dropzone__orb-ring"></span>
+                  <span class="dropzone__orb-star">✦</span>
+                </div>
+                <p class="dropzone__title">拖入照片，或轻点选择</p>
+                <p class="dropzone__sub">支持 JPG / PNG / HEIC 截图 · 可一次选择多张</p>
+                <div class="dropzone__actions">
+                  <button class="btn btn--gold btn--small" type="button" id="browseBtn">选择照片</button>
+                  <button class="text-btn" type="button" id="demoIdentifyBtn">先用示例样张体验 <span>→</span></button>
+                </div>
+              </div>
+              <p class="dropzone__foot"><span>✦</span> PRIVATE &amp; LOCAL · 识藏结果可随时手动修正</p>
+            </div>
+
+            <div class="scan-panel" id="scanPanel" hidden aria-live="polite">
+              <div class="scan-panel__head">
+                <span class="scan-panel__kicker">AI VISION · ANALYSING</span>
+                <span id="scanProgressLabel">0 / 0</span>
+              </div>
+              <div class="scan-track"><span id="scanBar"></span></div>
+              <div class="scan-grid" id="scanGrid"></div>
+              <p class="scan-caption" id="scanCaption">正在读取轮廓、配色与系列特征…</p>
+            </div>
+
+            <div class="identify-results" id="identifyResults" hidden>
+              <div class="identify-results__head">
+                <div>
+                  <span class="workbench-head__index">02</span>
+                  <h3>确认识藏档案</h3>
+                </div>
+                <p>AI 已给出建议，点击系列即可修正。</p>
+              </div>
+              <div class="result-grid" id="resultGrid"></div>
+              <div class="identify-actions">
+                <button class="text-btn text-btn--muted" type="button" id="clearResults">取消这批照片</button>
+                <button class="btn btn--gold" type="button" id="confirmImport">
+                  <span>确认入藏</span>
+                  <span class="btn__count" id="importCount">0</span>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5.5 15.5 10 11 14.5"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="atelier-log" id="atelierLog">
+              <div class="atelier-log__head">
+                <span class="workbench-head__index">03</span>
+                <h3>识藏记录</h3>
+                <span class="atelier-log__count" id="customPhotoCount">0 张本地照片</span>
+              </div>
+              <div class="atelier-log__empty" id="atelierLogEmpty">
+                <span aria-hidden="true">✧</span>
+                <p>这里会记录你导入的本地照片。<br>示例占位图不会被计入。</p>
+              </div>
+              <div class="atelier-log__strip" id="atelierLogStrip"></div>
+              <button class="text-btn text-btn--danger" id="clearCustomBtn" type="button" hidden>清空我导入的照片</button>
+            </div>
+          </section>
+
+          <aside class="atelier-aside">
+            <div class="atelier-card atelier-card--process">
+              <p class="aside-kicker">THE PROCESS</p>
+              <h3>从一张照片，<br>到一件藏品。</h3>
+              <ol class="process-list">
+                <li><span>01</span><div><strong>读取图像特征</strong><p>轮廓、主色与角色标志，全部在浏览器内完成。</p></div></li>
+                <li><span>02</span><div><strong>匹配泡泡玛特系列</strong><p>给出系列、角色与置信度，你可以轻松手动纠正。</p></div></li>
+                <li><span>03</span><div><strong>生成馆藏档案</strong><p>自动编号、记录入藏日期，并加入星树与藏馆。</p></div></li>
+              </ol>
+            </div>
+
+            <div class="atelier-card atelier-card--series">
+              <div class="aside-kicker-row">
+                <p class="aside-kicker">SERIES INDEX</p>
+                <span>10 SERIES</span>
+              </div>
+              <div class="mini-series" id="atelierSeriesList"></div>
+            </div>
+
+            <div class="atelier-card atelier-card--note">
+              <span class="rail-card__star" aria-hidden="true">✦</span>
+              <p>关于识别精度</p>
+              <h4>这是本地轻量识别，<br>不是云端大模型。</h4>
+              <span class="atelier-note">它擅长根据文件名、主色与色彩氛围做归类；遇到难以判断的照片，会诚实地给出较低置信度。你可以随时修改系列，最终决定权永远在你手里。</span>
+            </div>
+          </aside>
+        </div>
+
+        <footer class="atelier-foot">
+          <span>AI ATELIER · LOCAL VISION</span>
+          <i aria-hidden="true">✦</i>
+          <span>你的照片，只属于你的浏览器。</span>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <!-- ══════════════════════════ CURATORIAL VIEWER ══════════════════════════ -->
+  <div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewerTitle" aria-hidden="true">
+    <div class="viewer__backdrop" id="viewerBackdrop" aria-hidden="true"></div>
+    <div class="viewer__veil" aria-hidden="true"></div>
+    <div class="viewer__grain" aria-hidden="true"></div>
+
+    <header class="viewer__top">
+      <div class="viewer__curation">
+        <span class="viewer__curation-star" aria-hidden="true">✦</span>
+        <span>CURATORIAL VIEW</span>
+        <i></i>
+        <span id="viewerNo">PLATE 001</span>
+      </div>
+      <button class="viewer__close" id="viewerClose" type="button">
+        <span>返回星树</span><kbd>ESC</kbd><i aria-hidden="true"></i>
+      </button>
+    </header>
+
+    <div class="viewer__layout">
+      <div class="viewer__stage" id="viewerStage">
+        <div class="viewer__stage-halo" aria-hidden="true"></div>
+        <div class="viewer__stage-orbit" aria-hidden="true"><span>✦</span></div>
+        <div class="viewer__reflection" id="viewerReflection" aria-hidden="true"></div>
+
+        <div class="viewer__float">
+          <div class="art-card" id="artCard">
+            <div class="art-card__rotor" id="artRotor">
+              <div class="art-card__face art-card__front">
+                <div class="art-card__mat">
+                  <img id="viewerImage" src="" alt="">
+                  <span class="art-card__skeleton" id="viewerSkeleton"></span>
+                </div>
+                <span class="art-card__plate-no" id="viewerPlateNo">001</span>
+                <span class="art-card__plate-mark" aria-hidden="true">✦</span>
+                <div class="art-card__glare" aria-hidden="true"></div>
+                <div class="art-card__edge" aria-hidden="true"></div>
+              </div>
+              <div class="art-card__face art-card__back">
+                <div class="art-card__back-inner">
+                  <span class="art-card__back-star" aria-hidden="true">✦</span>
+                  <span class="art-card__back-brand">STELLAR<br>ARCHIVE</span>
+                  <span class="art-card__back-rule" aria-hidden="true"></span>
+                  <span class="art-card__back-caption">A PRIVATE COLLECTION<br>NOËL · MMXXVI</span>
+                  <span class="art-card__back-no" id="viewerBackNo">NO. 001</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="viewer__drag-hint">
+          <span class="mouse-glyph" aria-hidden="true"><i></i></span>
+          <span>拖动照片 · 360° 欣赏</span>
+          <em id="viewerAngle">0°</em>
+        </div>
+
+        <div class="viewer__stage-tools">
+          <button class="stage-tool" id="viewerZoomOut" type="button" aria-label="缩小照片">−</button>
+          <span id="viewerZoomLabel">100%</span>
+          <button class="stage-tool" id="viewerZoomIn" type="button" aria-label="放大照片">+</button>
+          <i aria-hidden="true"></i>
+          <button class="stage-tool stage-tool--wide" id="viewerSpin" type="button" aria-pressed="false">自动旋赏</button>
+        </div>
+
+        <button class="viewer__step viewer__step--prev" id="viewerPrev" type="button" aria-label="上一件藏品">
+          <span>←</span><em>PREV</em>
+        </button>
+        <button class="viewer__step viewer__step--next" id="viewerNext" type="button" aria-label="下一件藏品">
+          <em>NEXT</em><span>→</span>
+        </button>
+      </div>
+
+      <aside class="viewer__info" id="viewerInfo">
+        <div class="viewer__info-top">
+          <span class="viewer__series" id="viewerSeries">MOLLY</span>
+          <span class="viewer__rarity" id="viewerRarity">限定款</span>
+        </div>
+        <h2 id="viewerTitle">月桂星愿</h2>
+        <p class="viewer__title-en" id="viewerTitleEn">Moonlit Wish</p>
+        <p class="viewer__story" id="viewerStory">她把一小片月光折好，挂在了圣诞树最安静的枝头。</p>
+
+        <dl class="viewer__facts">
+          <div><dt>收藏系列 <span>COLLECTION</span></dt><dd id="viewerCollection">星愿漫游</dd></div>
+          <div><dt>藏品编号 <span>PLATE</span></dt><dd id="viewerId">PM-2026-001</dd></div>
+          <div><dt>入藏日期 <span>ACQUIRED</span></dt><dd id="viewerDate">2026.11.18</dd></div>
+          <div><dt>智能识别 <span>AI MATCH</span></dt><dd id="viewerConfidence">99.2%</dd></div>
+        </dl>
+
+        <div class="viewer__story-note">
+          <span aria-hidden="true">“</span>
+          <p id="viewerNote">每一件藏品，都有一小段只属于冬天的故事。</p>
+        </div>
+
+        <div class="viewer__actions">
+          <button class="btn btn--line btn--small" id="viewerFav" type="button" aria-pressed="false">
+            <span class="fav-glyph" aria-hidden="true">✦</span>
+            <span id="viewerFavLabel">收入珍藏</span>
+          </button>
+          <span class="viewer__sample" id="viewerSample">SAMPLE PLATE · 示例占位样张</span>
+        </div>
+      </aside>
+    </div>
+
+    <footer class="viewer__foot">
+      <div class="viewer__progress">
+        <span id="viewerIndex">001</span>
+        <i><b id="viewerProgressBar"></b></i>
+        <span id="viewerTotal">200</span>
+      </div>
+      <div class="viewer__quote">
+        <span>STELLAR ARCHIVE</span>
+        <em>“把喜欢，放在看得见的地方。”</em>
+      </div>
+      <div class="viewer__keyboard"><kbd>←</kbd><kbd>→</kbd> 切换藏品</div>
+    </footer>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="false"></div>
+  <div class="sr-only" id="srLive" aria-live="polite"></div>
+
+  <noscript>
+    <div class="noscript">星屿藏馆需要 JavaScript 才能点亮星树。请在浏览器中启用 JavaScript 后重新打开。</div>
+  </noscript>
+
+  <script src="assets/three.min.js"></script>
+  <script src="js/series.js"></script>
+  <script src="js/collection-data.js"></script>
+  <script src="js/tree.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

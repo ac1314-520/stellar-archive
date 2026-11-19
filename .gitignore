@@ -1,0 +1,15 @@
+# Local preview / browser automation
+.devtools/
+.edge-*/
+node_modules/
+__pycache__/
+*.pyc
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local archives and logs
+*.log
+*.zip

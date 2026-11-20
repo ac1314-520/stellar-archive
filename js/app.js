@@ -85,7 +85,7 @@ ${known}
   "new_series": false,
   "is_popmart": true,
   "character": "角色/款式名，不确定可填空字符串",
-  "title": "2 到 6 个中文字的圣诞或冬夜主题藏品名，不要照抄系列名",
+  "title": "2 到 6 个中文字的黑金展厅藏品名，克制、像艺术品名，不要照抄系列名",
   "confidence": 0.0 到 1.0 之间的数字,
   "reason": "一句话说明依据，20 字以内"
 }`;
@@ -137,6 +137,19 @@ ${known}
     customItems: [],
     items: [],
     filteredItems: [],
+    home: {
+      items: [],
+      index: 0,
+      switching: false,
+      timer: 0,
+    },
+    catalog: {
+      filter: "all",
+      query: "",
+      activeKey: null,
+      dialogOpen: false,
+      lastFocus: null,
+    },
     acts: [],
     currentAct: 0,
     actItems: [],
@@ -234,39 +247,33 @@ ${known}
     }
 
     refreshDataViews();
-    createStarDust();
-    initTreeScene();
-    updatePreloader(0, Math.max(1, state.actItems.length), "正在布置第一幕");
+    updatePreloader(0, Math.max(1, state.home.items.length), "正在布置展厅");
 
     const initialRoute = getInitialRoute();
     navigate(initialRoute, { push: false, initial: true });
 
-    // A deep link into a room should not wait for the salon's photographs.
-    if (initialRoute !== "tree") {
-      window.setTimeout(() => hidePreloader(), 850);
+    if (initialRoute !== "home") {
+      window.setTimeout(() => hidePreloader(), 700);
     }
 
     window.setTimeout(() => {
       if (!state.preloaderHidden) {
         hidePreloader();
-        showToast("照片还在布展，可以先逛藏品馆。");
+        showToast("展品还在布展，可以先逛藏品馆。");
       }
-    }, 14000);
+    }, 12000);
 
     try {
       await Promise.all([
-        preloadCurrentAct(),
-        // Fonts should not be allowed to hold the whole exhibition hostage;
-        // the fallback face is already usable.
+        preloadHomeImages(state.home.items.slice(0, 6)),
         Promise.race([document.fonts?.ready || Promise.resolve(), wait(1100)]),
-        wait(450),
+        wait(420),
       ]);
     } catch (error) {
-      console.warn("First act preload:", error);
+      console.warn("Home preload:", error);
     }
     hidePreloader(true);
-    state.orbit.active = state.route === "tree";
-    state.treeScene?.setActive(state.route === "tree");
+    startHomeTimer();
     if (!state.items.length) {
       showToast("还没有藏品。去识藏室放入第一张照片吧。");
     }
@@ -275,11 +282,16 @@ ${known}
   function cacheElements() {
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
-      "topbar", "navCount", "treeView", "treeStage", "photoOrbit", "treeRing",
-      "treeSculpture", "treeShield", "treeCanvas", "treeFallback", "treeParticles", "treePhotoList", "treeZoom", "treeZoomValue", "starDust",
-      "heroCount", "heroSeriesCount", "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
-      "actRailDots", "actRailCurrent", "actRailTotal", "actRailTitle",
-      "actCounter", "actTitle", "mobileActCurrent", "mobileActTotal", "actAnnouncement",
+      "topbar", "navCount", "homeView", "homeFeatureButton", "homeFeatureImage",
+      "homeFeatureIndex", "homeFeatureGhost", "homeFeatureNo", "homeFeatureTitle",
+      "homeFeatureSeries", "homeFeatureCollection", "homeFeatureProgress",
+      "homeFeatureRail", "homePrev", "homeNext", "homePieceCount", "homeSeriesCount",
+      "heroCount", "heroSeriesCount",
+      "catalogView", "catalogGrid", "catalogVisible", "catalogEmpty", "catalogSearch",
+      "catalogFilters", "catalogSeriesCount", "catalogTotal", "catalogOwned",
+      "catalogDialog", "catalogDialogIndex", "catalogDialogTitle", "catalogDialogCn",
+      "catalogDialogIntro", "catalogDialogCount", "catalogDialogCollection",
+      "catalogDialogEn", "catalogDialogGrid", "catalogDialogEmpty",
       "collectionView", "collectionGrid", "emptyState", "emptyReset",
       "resultCount", "collectionCount", "collectionSeries", "collectionRare",
       "seriesFilters", "rarityFilters", "filterFavourite", "favCount",
@@ -311,7 +323,8 @@ ${known}
     el.topnavItems = $$(".topnav__item");
     el.routeTargets = $$("[data-route]");
     el.loadTotal = document.getElementById("loadTotal");
-    el.scrollViews = [el.collectionView, el.atelierView];
+    el.catalogClose = $(".catalog-dialog__close", el.catalogDialog);
+    el.scrollViews = [el.homeView, el.collectionView, el.catalogView, el.atelierView].filter(Boolean);
     el.viewer.inert = true;
     el.viewer.setAttribute("inert", "");
     el.aiDrawer.inert = true;
@@ -332,24 +345,6 @@ ${known}
       }
     });
 
-    document.addEventListener("click", (event) => {
-      const orbitAction = event.target.closest("[data-orbit-action]");
-      if (orbitAction) {
-        if (orbitAction.dataset.orbitAction === "toggle") toggleOrbit();
-        return;
-      }
-      const zoomAction = event.target.closest("[data-tree-zoom]");
-      if (zoomAction) {
-        state.treeScene?.zoomBy(zoomAction.dataset.treeZoom === "in" ? 0.06 : -0.06);
-        return;
-      }
-      const actAction = event.target.closest("[data-act-action]");
-      if (actAction) {
-        shiftAct(actAction.dataset.actAction === "prev" ? -1 : 1);
-      }
-    });
-
-    bindOrbitUiEvents();
     bindAiDrawerEvents();
 
     el.seriesFilters.addEventListener("click", (event) => {
@@ -423,6 +418,9 @@ ${known}
       openViewer(item, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width }, state.filteredItems);
     });
 
+    bindHomeEvents();
+    bindCatalogEvents();
+
     window.addEventListener("popstate", () => {
       const route = getInitialRoute();
       if (route !== state.route) navigate(route, { push: false, fromHistory: true });
@@ -436,13 +434,7 @@ ${known}
       view.addEventListener("scroll", updateTopbarState, { passive: true });
     });
 
-    window.addEventListener("resize", () => {
-      state.treeScene?.resize();
-      updateOrbitUI();
-    });
-    window.addEventListener("orientationchange", () => {
-      window.setTimeout(() => state.treeScene?.resize(), 250);
-    });
+    window.addEventListener("resize", updateTopbarState);
 
     document.addEventListener("keydown", onGlobalKeydown);
     bindViewerEvents();
@@ -455,7 +447,9 @@ ${known}
   }
 
   function activeScrollView() {
+    if (state.route === "home") return el.homeView;
     if (state.route === "collection") return el.collectionView;
+    if (state.route === "catalog") return el.catalogView;
     if (state.route === "atelier") return el.atelierView;
     return null;
   }
@@ -471,12 +465,14 @@ ${known}
 
   function getInitialRoute() {
     const hash = window.location.hash.replace(/^#\/?/, "").split("/")[0];
-    return ["tree", "collection", "atelier"].includes(hash) ? hash : "tree";
+    if (hash === "tree" || hash === "") return "home";
+    if (hash === "catalogue") return "catalog";
+    return ["home", "collection", "catalog", "atelier"].includes(hash) ? hash : "home";
   }
 
   function navigate(route, options = {}) {
-    const valid = ["tree", "collection", "atelier"];
-    const target = valid.includes(route) ? route : "tree";
+    const valid = ["home", "collection", "catalog", "atelier"];
+    const target = valid.includes(route) ? route : "home";
     const { push = true, initial = false, fromHistory = false } = options;
 
     if (push && !fromHistory && window.location.hash !== `#${target}`) {
@@ -486,6 +482,7 @@ ${known}
     }
 
     if (state.viewer.open) closeViewer({ restoreFocus: false });
+    if (state.catalog.dialogOpen) closeCatalogDialog({ restoreFocus: false });
     const changed = state.route !== target;
     state.route = target;
     document.body.dataset.view = target;
@@ -507,26 +504,20 @@ ${known}
       item.classList.toggle("is-active", item.dataset.route === target);
     });
 
-    if (target === "tree") {
-      el.topbar.classList.remove("is-scrolled");
-      state.orbit.active = true;
-      state.treeScene?.setPaused(state.orbit.paused);
-      state.treeScene?.setActive(true);
-      window.requestAnimationFrame(() => state.treeScene?.resize());
-    } else {
-      state.orbit.active = false;
-      state.treeScene?.setActive(false);
-      updateTopbarState();
-      if (target === "collection") {
-        renderCollection();
-      }
-      if (target === "atelier") {
-        renderAtelierLog();
-      }
+    updateTopbarState();
+    if (target === "home") {
+      renderHome();
+      startHomeTimer();
+    } else if (target === "collection") {
+      renderCollection();
+    } else if (target === "catalog") {
+      renderCatalog();
+    } else if (target === "atelier") {
+      renderAtelierLog();
     }
 
-    const label = target === "tree" ? "星树" : target === "collection" ? "藏品馆" : "识藏室";
-    el.srLive.textContent = `已进入${label}`;
+    const labels = { home: "展厅", collection: "藏品馆", catalog: "图鉴", atelier: "识藏室" };
+    el.srLive.textContent = `已进入${labels[target] || "展厅"}`;
 
     if (changed) {
       window.scrollTo({ top: 0, behavior: "auto" });
@@ -548,7 +539,7 @@ ${known}
     state.preloaderHidden = true;
     if (el.loadPercent) el.loadPercent.textContent = "100";
     if (el.loadBar) el.loadBar.style.width = "100%";
-    if (el.loadStatus) el.loadStatus.textContent = "第一幕布展完成";
+    if (el.loadStatus) el.loadStatus.textContent = "展厅布展完成";
     document.body.classList.add("is-ready");
     window.setTimeout(() => {
       if (el.loadBar) el.loadBar.style.width = "100%";
@@ -561,7 +552,356 @@ ${known}
   }
 
   /* ══════════════════════════════════════════════════════════════════════
-     the salon · eight acts, a crisp photograph orbit
+     the museum · featured object & catalogue
+     ══════════════════════════════════════════════════════════════════════ */
+
+  function homeImageFor(item) {
+    if (!item) return "";
+    return item.src || item.thumb || gridImageFor(item);
+  }
+
+  function getHomeItems() {
+    const selected = [];
+    const seen = new Set();
+    const preferred = ["skullpanda", "hirono", "labubu", "dimoo", "molly", "crybaby", "sweetbean", "pucky"];
+    const orderedKeys = [
+      ...preferred.filter((key) => SERIES_ORDER.includes(key)),
+      ...SERIES_ORDER.filter((key) => !preferred.includes(key)),
+    ];
+    for (const key of orderedKeys) {
+      const item = state.items.find((candidate) => candidate.seriesKey === key);
+      if (!item || seen.has(item.id)) continue;
+      selected.push(item);
+      seen.add(item.id);
+      if (selected.length >= 8) break;
+    }
+    if (selected.length < 8) {
+      for (const item of state.items) {
+        if (seen.has(item.id)) continue;
+        selected.push(item);
+        seen.add(item.id);
+        if (selected.length >= 8) break;
+      }
+    }
+    return selected;
+  }
+
+  function renderHome() {
+    const items = getHomeItems();
+    state.home.items = items;
+    state.home.index = clamp(state.home.index, 0, Math.max(0, items.length - 1));
+    updateHomeFeature(false);
+  }
+
+  function setHomeIndex(index, animate = true) {
+    if (!state.home.items.length) return;
+    state.home.index = ((index % state.home.items.length) + state.home.items.length) % state.home.items.length;
+    updateHomeFeature(animate);
+    startHomeTimer();
+  }
+
+  function updateHomeFeature(animate = true) {
+    if (!el.homeFeatureImage) return;
+    const items = state.home.items;
+    const item = items[state.home.index];
+    if (!item) {
+      el.homeFeatureImage.removeAttribute("src");
+      el.homeFeatureImage.alt = "";
+      if (el.homeFeatureRail) el.homeFeatureRail.innerHTML = '<span class="home-rail__empty">等待第一件藏品入馆</span>';
+      return;
+    }
+
+    const total = String(items.length).padStart(2, "0");
+    const index = String(state.home.index + 1).padStart(2, "0");
+    const progress = `${((state.home.index + 1) / items.length) * 100}%`;
+    const meta = findSeries(item.seriesKey);
+
+    const apply = () => {
+      const src = homeImageFor(item);
+      el.homeFeatureImage.onerror = () => {
+        el.homeFeatureImage.onerror = null;
+        if (src !== item.src) el.homeFeatureImage.src = item.src;
+      };
+      el.homeFeatureImage.src = src;
+      el.homeFeatureImage.alt = `${item.series} ${item.title}`;
+      if (el.homeFeatureIndex) el.homeFeatureIndex.textContent = `${index} / ${total}`;
+      if (el.homeFeatureGhost) el.homeFeatureGhost.textContent = item.no || "001";
+      if (el.homeFeatureNo) el.homeFeatureNo.textContent = `NO. ${item.no || "001"}`;
+      if (el.homeFeatureTitle) el.homeFeatureTitle.textContent = item.title;
+      if (el.homeFeatureSeries) el.homeFeatureSeries.textContent = item.series;
+      if (el.homeFeatureCollection) el.homeFeatureCollection.textContent = item.collection || meta?.collection || "私人收藏";
+      if (el.homeFeatureProgress) el.homeFeatureProgress.style.width = progress;
+      if (el.homeFeatureButton) el.homeFeatureButton.setAttribute("aria-label", `欣赏 ${item.series} ${item.title}`);
+      if (el.homeFeatureRail) {
+        el.homeFeatureRail.replaceChildren();
+        items.forEach((entry, entryIndex) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.homeIndex = String(entryIndex);
+          button.className = entryIndex === state.home.index ? "is-active" : "";
+          button.setAttribute("aria-label", `查看第 ${entryIndex + 1} 件精选展品：${entry.title}`);
+          const image = document.createElement("img");
+          image.src = gridImageFor(entry);
+          image.alt = "";
+          image.loading = "lazy";
+          image.decoding = "async";
+          button.appendChild(image);
+          el.homeFeatureRail.appendChild(button);
+        });
+      }
+    };
+
+    if (animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      state.home.switching = true;
+      el.homeFeatureButton?.classList.add("is-switching");
+      window.setTimeout(() => {
+        apply();
+        state.home.switching = false;
+        el.homeFeatureButton?.classList.remove("is-switching");
+      }, 180);
+    } else {
+      apply();
+    }
+  }
+
+  function openHomeFeature() {
+    const item = state.home.items[state.home.index];
+    if (!item) return;
+    const rect = el.homeFeatureButton?.getBoundingClientRect();
+    openViewer(item, rect ? {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+      width: rect.width * 0.55,
+    } : undefined, state.home.items);
+  }
+
+  function bindHomeEvents() {
+    el.homeFeatureButton?.addEventListener("click", openHomeFeature);
+    el.homePrev?.addEventListener("click", () => setHomeIndex(state.home.index - 1));
+    el.homeNext?.addEventListener("click", () => setHomeIndex(state.home.index + 1));
+    el.homeFeatureRail?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-home-index]");
+      if (!button) return;
+      setHomeIndex(Number(button.dataset.homeIndex));
+    });
+  }
+
+  function startHomeTimer() {
+    window.clearInterval(state.home.timer);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    state.home.timer = window.setInterval(() => {
+      if (state.route !== "home" || state.viewer.open || state.catalog.dialogOpen || document.hidden) return;
+      if (state.home.switching) return;
+      const items = state.home.items;
+      if (items.length < 2) return;
+      state.home.index = (state.home.index + 1) % items.length;
+      updateHomeFeature(true);
+    }, 6800);
+  }
+
+  async function preloadHomeImages(items) {
+    if (!items.length) return;
+    let loaded = 0;
+    updatePreloader(0, items.length, "正在布置展厅");
+    await Promise.all(items.map((item) => new Promise((resolve) => {
+      const image = new Image();
+      const done = () => {
+        loaded += 1;
+        updatePreloader(loaded, items.length, loaded >= items.length ? "展品已就位" : "正在挂上展品");
+        resolve();
+      };
+      image.onload = done;
+      image.onerror = done;
+      image.src = homeImageFor(item);
+      window.setTimeout(done, 9000);
+    })));
+  }
+
+  function catalogSeriesEntries() {
+    return SERIES_ORDER.map((key, index) => {
+      const meta = SERIES[key];
+      const items = state.items.filter((item) => item.seriesKey === key);
+      return { key, meta, items, index };
+    });
+  }
+
+  function renderCatalog() {
+    if (!el.catalogGrid) return;
+    const entries = catalogSeriesEntries();
+    const query = state.catalog.query.toLowerCase();
+    const filtered = entries.filter((entry) => {
+      const owned = entry.items.length > 0;
+      if (state.catalog.filter === "owned" && !owned) return false;
+      if (state.catalog.filter === "pending" && owned) return false;
+      if (query) {
+        const haystack = [
+          entry.meta.name,
+          entry.meta.cn,
+          entry.meta.collection,
+          entry.meta.collectionEn,
+          entry.meta.intro,
+          ...entry.items.slice(0, 20).map((item) => `${item.title} ${item.character || ""}`),
+        ].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
+    });
+
+    el.catalogGrid.innerHTML = filtered.map((entry) => {
+      const { meta, items, index, key } = entry;
+      const cover = items[0] ? gridImageFor(items[0]) : "";
+      const count = items.length;
+      const monogram = meta.name.replace(/[^A-Z0-9]/gi, "").slice(0, 2) || "SA";
+      const status = count ? `已收录 ${count} 件` : "待收录";
+      return `
+        <button class="catalog-card${count ? "" : " catalog-card--pending"}" type="button" data-catalog-series="${key}" aria-label="翻阅 ${escapeHTML(meta.name)} · ${escapeHTML(meta.cn)} 图鉴">
+          <span class="catalog-card__cover"${count ? "" : ` data-monogram="${escapeHTML(monogram)}"`}>
+            ${cover ? `<img src="${escapeHTML(cover)}" alt="" loading="lazy" decoding="async">` : ""}
+            <span class="catalog-card__index">${String(index + 1).padStart(2, "0")}</span>
+            <span class="catalog-card__count"><b>${count || "—"}</b> ${count ? "PIECES" : "PENDING"}</span>
+          </span>
+          <span class="catalog-card__body">
+            <h3>${escapeHTML(meta.name)}</h3>
+            <p>${escapeHTML(meta.cn)} · ${escapeHTML(meta.collection || "自由归档")}</p>
+            <span class="catalog-card__status"><span>${status}</span><em>OPEN ↗</em></span>
+          </span>
+        </button>`;
+    }).join("");
+
+    if (el.catalogVisible) el.catalogVisible.textContent = String(filtered.length);
+    if (el.catalogEmpty) el.catalogEmpty.hidden = filtered.length > 0;
+    updateCounts();
+    if (state.catalog.dialogOpen && state.catalog.activeKey) {
+      populateCatalogDialog(state.catalog.activeKey);
+    }
+  }
+
+  function populateCatalogDialog(key) {
+    const meta = SERIES[key];
+    if (!meta) return;
+    const entries = catalogSeriesEntries();
+    const entry = entries.find((candidate) => candidate.key === key);
+    if (!entry) return;
+    const items = entry.items;
+    const index = entries.indexOf(entry) + 1;
+    const total = entries.length;
+    if (el.catalogDialogIndex) el.catalogDialogIndex.textContent = `${String(index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
+    if (el.catalogDialogTitle) el.catalogDialogTitle.textContent = meta.name;
+    if (el.catalogDialogCn) el.catalogDialogCn.textContent = meta.cn || "";
+    if (el.catalogDialogIntro) el.catalogDialogIntro.textContent = meta.intro || "为还没有归处的藏品保留的一席。";
+    if (el.catalogDialogCount) el.catalogDialogCount.textContent = String(items.length);
+    if (el.catalogDialogCollection) el.catalogDialogCollection.textContent = meta.collection || "自由归档";
+    if (el.catalogDialogEn) el.catalogDialogEn.textContent = meta.collectionEn || "FREE ARCHIVE";
+    if (el.catalogDialogEmpty) el.catalogDialogEmpty.hidden = items.length > 0;
+    if (el.catalogDialogGrid) {
+      el.catalogDialogGrid.innerHTML = items.map((item) => `
+        <button class="catalog-piece" type="button" data-catalog-open="${item.id}" aria-label="欣赏 ${escapeHTML(item.series)} ${escapeHTML(item.title)}">
+          <span class="catalog-piece__image"><img src="${escapeHTML(gridImageFor(item))}" alt="" loading="lazy" decoding="async"></span>
+          <span class="catalog-piece__body">
+            <span class="catalog-piece__no">NO. ${escapeHTML(item.no)}</span>
+            <span class="catalog-piece__title">${escapeHTML(item.title)}</span>
+          </span>
+        </button>`).join("");
+    }
+  }
+
+  function openCatalogDialog(key, trigger) {
+    if (!SERIES[key]) return;
+    state.catalog.activeKey = key;
+    state.catalog.lastFocus = trigger || document.activeElement;
+    populateCatalogDialog(key);
+    el.catalogDialog.hidden = false;
+    state.catalog.dialogOpen = true;
+    document.body.classList.add("catalog-open");
+    window.requestAnimationFrame(() => el.catalogDialog.classList.add("is-open"));
+    window.setTimeout(() => el.catalogClose?.focus({ preventScroll: true }), 80);
+  }
+
+  function closeCatalogDialog(options = {}) {
+    if (!state.catalog.dialogOpen) return;
+    const { restoreFocus = true } = options;
+    state.catalog.dialogOpen = false;
+    el.catalogDialog.classList.remove("is-open");
+    el.catalogDialog.hidden = true;
+    document.body.classList.remove("catalog-open");
+    if (restoreFocus && state.catalog.lastFocus && document.contains(state.catalog.lastFocus)) {
+      try { state.catalog.lastFocus.focus({ preventScroll: true }); } catch {}
+    }
+    state.catalog.lastFocus = null;
+  }
+
+  function bindCatalogEvents() {
+    el.catalogGrid?.addEventListener("click", (event) => {
+      const card = event.target.closest("[data-catalog-series]");
+      if (!card) return;
+      openCatalogDialog(card.dataset.catalogSeries, card);
+    });
+
+    el.catalogFilters?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-catalog-filter]");
+      if (!button) return;
+      state.catalog.filter = button.dataset.catalogFilter;
+      el.catalogFilters.querySelectorAll("[data-catalog-filter]").forEach((node) => {
+        const active = node === button;
+        node.classList.toggle("is-active", active);
+        node.setAttribute("aria-pressed", String(active));
+      });
+      renderCatalog();
+    });
+
+    let searchTimer = 0;
+    el.catalogSearch?.addEventListener("input", () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        state.catalog.query = el.catalogSearch.value.trim();
+        renderCatalog();
+      }, 120);
+    });
+
+    el.catalogDialog?.addEventListener("click", (event) => {
+      if (event.target.closest("[data-catalog-close]")) {
+        closeCatalogDialog();
+        return;
+      }
+      const openButton = event.target.closest("[data-catalog-open]");
+      if (!openButton) return;
+      const item = state.items.find((candidate) => candidate.id === openButton.dataset.catalogOpen);
+      if (!item) return;
+      const rect = openButton.getBoundingClientRect();
+      closeCatalogDialog({ restoreFocus: false });
+      openViewer(item, {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        width: rect.width,
+      }, state.items.filter((candidate) => candidate.seriesKey === item.seriesKey));
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (!state.catalog.dialogOpen) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCatalogDialog();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = $$("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])", el.catalogDialog)
+        .filter((node) => !node.disabled && node.getClientRects().length && !node.hasAttribute("hidden"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !el.catalogDialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !el.catalogDialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     legacy salon helpers · kept inert while the museum is the only home
      ══════════════════════════════════════════════════════════════════════ */
 
   function createStarDust() {
@@ -1175,9 +1515,9 @@ ${known}
       collection: meta.collection,
       collectionEn: meta.collectionEn,
       character: meta.name,
-      title: record.title || "冬日新藏",
+      title: record.title || "新藏入馆",
       titleEn: "NEW ACQUISITION",
-      story: record.story || `${meta.intro} 它刚刚从你的相册，来到圣诞星树下。`,
+      story: record.story || `${meta.intro} 它刚刚从你的相册，来到星屿藏馆的展柜里。`,
       rarity: record.rarity || "新入藏",
       date: record.date || formatDate(),
       accent: meta.accent,
@@ -1398,13 +1738,13 @@ ${known}
     state.items = state.customItems.concat(state.demo);
     state.filteredItems = state.items.slice();
     pruneFavourites();
-    buildActs();
-    applyActImages();
-    updateCounts();
+    renderHome();
+    renderCatalog();
     renderFilters();
     renderAtelierSeriesList();
     renderCollection();
     renderAtelierLog();
+    updateCounts();
   }
 
   function seriesCounts() {
@@ -1420,14 +1760,22 @@ ${known}
   function updateCounts() {
     const total = state.items.length;
     const rare = state.items.filter((item) => item.rarity === "隐藏款" || item.rarity === "限定款").length;
-    el.navCount.textContent = total;
-    el.heroCount.textContent = total;
-    el.heroSeriesCount.textContent = SERIES_ORDER.length;
-    el.collectionCount.textContent = total;
-    el.collectionSeries.textContent = SERIES_ORDER.length;
-    el.collectionRare.textContent = rare;
-    el.resultCount.textContent = state.filteredItems.length;
-    el.favCount.textContent = state.favourites.size;
+    const counts = seriesCounts();
+    const ownedSeries = SERIES_ORDER.filter((key) => (counts[key] || 0) > 0).length;
+    const setText = (node, value) => { if (node) node.textContent = value; };
+    setText(el.navCount, total);
+    setText(el.heroCount, total);
+    setText(el.heroSeriesCount, SERIES_ORDER.length);
+    setText(el.homePieceCount, total);
+    setText(el.homeSeriesCount, SERIES_ORDER.length);
+    setText(el.collectionCount, total);
+    setText(el.collectionSeries, SERIES_ORDER.length);
+    setText(el.collectionRare, rare);
+    setText(el.resultCount, state.filteredItems.length);
+    setText(el.favCount, state.favourites.size);
+    setText(el.catalogSeriesCount, SERIES_ORDER.length);
+    setText(el.catalogTotal, total);
+    setText(el.catalogOwned, ownedSeries);
     const seriesLabel = document.getElementById("seriesTotalLabel");
     if (seriesLabel) seriesLabel.textContent = `SERIES · ${SERIES_ORDER.length}`;
     const atelierSeriesTotal = document.getElementById("atelierSeriesTotal");
@@ -1804,7 +2152,7 @@ ${known}
         : "—";
     el.viewerSample.textContent = item.sample ? "SAMPLE PLATE · 示例占位样张" : "PRIVATE COLLECTION · 私人藏品";
     el.viewerNote.textContent = item.sample
-      ? "这是为了让星树先亮起来而制作的样张；可在识藏室换成你的真实照片。"
+      ? "这是为了让展厅先亮起来而制作的样张；可在识藏室换成你的真实照片。"
       : "照片只保存在这台设备的浏览器里，不会上传到任何服务器。";
     if (meta.accent) el.viewer.style.setProperty("--viewer-accent", meta.accent);
   }
@@ -1923,15 +2271,9 @@ ${known}
     el.viewerFloat.style.transition = "";
     el.viewerFloat.style.transform = "";
     el.viewerFloat.style.opacity = "";
-    el.photoTip.classList.remove("is-visible");
+    el.photoTip?.classList.remove("is-visible");
     if (restoreFocus && viewer.lastFocus && document.contains(viewer.lastFocus)) {
       try { viewer.lastFocus.focus({ preventScroll: true }); } catch {}
-    }
-    if (state.route === "tree") {
-      state.orbit.active = true;
-      state.orbit.lastTime = performance.now();
-      state.treeScene?.setPaused(state.orbit.paused);
-      state.treeScene?.setActive(true);
     }
   }
 
@@ -2049,6 +2391,10 @@ ${known}
     if (event.key === "/" && state.route === "collection") {
       event.preventDefault();
       el.searchInput.focus();
+    }
+    if (event.key === "/" && state.route === "catalog" && !state.catalog.dialogOpen) {
+      event.preventDefault();
+      el.catalogSearch?.focus();
     }
     if (event.key === "Escape" && state.route === "collection" && (state.query || state.filters.series !== "all" || state.filters.rarity !== "all" || state.filters.favourite)) {
       resetAllFilters();
@@ -3055,9 +3401,9 @@ ${known}
       /^[a-z0-9 ]+$/i.test(cleaned) ||
       /^(img|image|dsc|photo|微信图片|wechat|screenshot|截屏|pxl|mmexport|wx_camera)/i.test(compactName);
     const pool = [
-      "初雪来客", "冬夜来信", "星枝新藏", "松间拾光", "月下偶遇",
-      "雪落有声", "铃铛私语", "暖灯小住", "圣诞前夜", "银河邮差",
-      "冬青愿望", "微光旅人", "白昼星屑", "炉火微光", "极夜回声",
+      "暗金序曲", "夜航星图", "微光入席", "静默陈列", "月下偶遇",
+      "黑曜回声", "金线私语", "暖灯小住", "午夜来客", "银河邮差",
+      "琥珀愿望", "无声旅人", "白昼星屑", "炉火微光", "极夜回声",
     ];
     const seed = (cleaned + meta.key + Math.round(features.hue) + Math.round(features.saturation * 100) + (features.extraSeed || 0))
       .split("")
@@ -3149,7 +3495,7 @@ ${known}
         character: meta.name,
         title: result.title,
         titleEn: "NEW ACQUISITION",
-        story: `${meta.intro} 它刚刚从你的相册，来到圣诞星树下。`,
+        story: `${meta.intro} 它刚刚从你的相册，来到星屿藏馆的展柜里。`,
         rarity: "新入藏",
         date: today,
         accent: meta.accent,
@@ -3204,7 +3550,7 @@ ${known}
     refreshDataViews();
     navigate("collection");
     el.collectionView.scrollTop = 0;
-    showToast(`已入藏 ${inserted} 件新藏品，星树已重新编排。`);
+    showToast(`已入藏 ${inserted} 件新藏品，图鉴已重新编排。`);
     el.confirmImport.disabled = false;
     if (labelNode) labelNode.textContent = "确认入藏";
   }

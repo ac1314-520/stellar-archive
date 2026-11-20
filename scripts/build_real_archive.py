@@ -43,17 +43,20 @@ CARD_SIZE = (600, 750)
 THUMB_SIZE = (300, 375)
 MAT = (100, 125, 1100, 1375)  # left, top, right, bottom
 INNER = (1000, 1250)
-ASSET_VERSION = os.environ.get("ASSET_VERSION", "20261120f")
+ASSET_VERSION = os.environ.get("ASSET_VERSION", "20261120g")
 ASSET_SUFFIX = f"?v={ASSET_VERSION}"
+NUMBERING = ROOT / "scripts" / "collection-numbering.json"
 
 IP_PREFIXES = [
-    ("THE MONSTERS", "THE MONSTERS"),
+    ("THE MONSTERS", "LABUBU"),
     ("SKULLPANDA", "SKULLPANDA"),
     ("Crybaby", "CRYBABY"),
     ("DIMOO", "DIMOO"),
     ("HACIPUPU", "HACIPUPU"),
     ("HACI", "HACIPUPU"),
     ("Labubu", "LABUBU"),
+    ("Zsiga", "ZSIGA"),
+    ("小甜豆", "SWEET BEAN"),
     ("星星人", "TWINKLE TWINKLE"),
 ]
 
@@ -63,8 +66,9 @@ IP_CN = {
     "HACIPUPU": "哈奇噗噗",
     "LABUBU": "拉布布",
     "SKULLPANDA": "骷髅熊猫",
-    "THE MONSTERS": "精灵天团",
     "TWINKLE TWINKLE": "星星人",
+    "ZSIGA": "兹西加",
+    "SWEET BEAN": "甜豆",
 }
 
 # Series definition order = catalogue order. Each entry is keyed by
@@ -79,22 +83,37 @@ SERIES_DEFS = [
     ("dimoo-disney", "DIMOO", "迪士尼联名系列", "DISNEY", "#e2b77e", "米奇大街的午后、气球与旧房子，都收进同一本手账。"),
     ("dimoo-throttle", "DIMOO", "马力全开系列", "FULL THROTTLE", "#cbb28b", "把游戏手柄当缰绳，赢下今天最后一局。"),
     ("hacipupu-lostpaws", "HACIPUPU", "迷路汪汪系列", "LOST PAWS", "#c0b1d8", "耳朵先听见风，脚再慢慢找到回家的路。"),
-    ("labubu-coke", "LABUBU", "可口可乐联名", "COCA-COLA", "#c85b52", "气泡升起时，森林也开了一瓶冰镇夏天。"),
+    ("hacipupu-secretstory", "HACIPUPU", "秘境物语系列", "SECRET STORY", "#c7b5d8", "把梦藏进云里，再交给守夜的人。"),
+    ("hacipupu-animals", "HACIPUPU", "动物贴贴系列", "ANIMAL HUGS", "#e2b8c5", "把小动物穿在身上，也把温柔贴在心上。"),
+    ("labubu-coke", "LABUBU", "可口可乐系列", "COCA-COLA", "#c85b52", "气泡升起时，森林也开了一瓶冰镇夏天。"),
     ("labubu-cat", "LABUBU", "一喵变猫系列", "CAT MODE", "#b9ab9d", "披上猫的外套，学会在屋顶上无声地走。"),
     ("labubu-voltage", "LABUBU", "前方高能系列", "HIGH VOLTAGE", "#d7c68e", "六种情绪各自出发，在森林深处碰头。"),
     ("labubu-seated", "LABUBU", "坐坐派对搪胶毛绒系列", "SEATED PARTY", "#b8b1a4", "兜帽压低，音乐响起，坐在一起就是派对。"),
     ("labubu-macaron", "LABUBU", "心动马卡龙系列", "MACARON HEART", "#e8b7c7", "把甜点做成颜色，把心跳藏进糖霜。"),
     ("labubu-chess", "LABUBU", "象棋大冒险系列", "CHESS ADVENTURE", "#c9a96e", "棋盘铺开，森林里的小皇后准备落子。"),
+    ("labubu-convenience", "LABUBU", "怪味便利店系列", "ODD CONVENIENCE", "#b9c28e", "货架上摆着奇怪的口味，也摆着一点日常的顽皮。"),
+    ("labubu-onepiece", "LABUBU", "航海王系列", "ONE PIECE", "#d4a05e", "把草帽戴正，向伟大航路出发。"),
+    ("monsters-barbershop", "LABUBU", "复古理发店系列", "BARBERSHOP", "#c9a592", "旧镜子、丝绒椅和一点反叛，理发店下午三点开门。"),
+    ("monsters-summer", "LABUBU", "晒晒夏日系列", "SUMMER", "#e4b8c5", "把夏天晒得蓬松，再系上一根粉色缎带。"),
+    ("monsters-sanrio", "LABUBU", "三丽鸥家族系列", "SANRIO", "#e7b8cb", "云朵与奶油色的午后，精灵们借走了三丽鸥的温柔。"),
     ("skullpanda-dontwanna", "SKULLPANDA", "不想不想系列", "DON'T WANNA", "#b7a1cd", "今天不赶路，把时间留给床、窗和发呆。"),
     ("skullpanda-garden", "SKULLPANDA", "光织园系列", "LIGHT GARDEN", "#b8cbb0", "用光与绒毛织一座不设围墙的花园。"),
     ("skullpanda-coffee", "SKULLPANDA", "咖啡工厂系列", "COFFEE FACTORY", "#c3a58b", "夜色烘焙，心事研磨，最后加一份安静。"),
     ("skullpanda-pony", "SKULLPANDA", "小马宝莉系列", "MY LITTLE PONY", "#d8a2c8", "友谊的魔法落在鬃毛上，每一匹都有自己的颜色。"),
     ("skullpanda-wednesday", "SKULLPANDA", "星期三毛绒公仔挂件", "WEDNESDAY PLUSH", "#9d9db6", "奈弗莫尔学院的门开了，黑色领带先走进去。"),
     ("skullpanda-throttle", "SKULLPANDA", "马力全开系列", "FULL THROTTLE", "#b9b0b2", "把风留在身后，让鬃毛替它说话。"),
-    ("monsters-barbershop", "THE MONSTERS", "复古理发店系列", "BARBERSHOP", "#c9a592", "旧镜子、丝绒椅和一点反叛，理发店下午三点开门。"),
-    ("monsters-summer", "THE MONSTERS", "晒晒夏日系列", "SUMMER", "#e4b8c5", "把夏天晒得蓬松，再系上一根粉色缎带。"),
-    ("monsters-sanrio", "THE MONSTERS", "三丽鸥家族系列", "SANRIO", "#e7b8cb", "云朵与奶油色的午后，精灵们借走了三丽鸥的温柔。"),
+    ("skullpanda-dailywonder", "SKULLPANDA", "平日奇境系列", "EVERYDAY WONDER", "#c3aebe", "平凡日子里，也会突然掉进一小块奇境。"),
+    ("skullpanda-plum", "SKULLPANDA", "庭前墨梅系列", "PLUM INK", "#b9a6a1", "墨色落笔，梅花在庭前慢慢开。"),
+    ("skullpanda-temperature", "SKULLPANDA", "温度系列", "TEMPERATURE", "#a8b8c7", "天气有温度，心事也有。"),
+    ("skullpanda-flowers", "SKULLPANDA", "花的四幕戏系列", "FLOWER IN FOUR ACTS", "#c7a6b4", "以花为幕，一场戏分成四段慢慢上演。"),
+    ("skullpanda-gate", "SKULLPANDA", "进退之门系列", "GATE", "#a99bb8", "门开或不开，都是一种选择。"),
     ("twinkle-heartbeat", "TWINKLE TWINKLE", "怦然心动系列", "HEARTBEAT", "#efc38d", "星星落在毛绒上，心跳就有了形状。"),
+    ("twinkle-123", "TWINKLE TWINKLE", "123！星星人系列", "123 TWINKLE", "#efc38d", "数到三，星星人就从天上跳下来。"),
+    ("zsiga-slow", "ZSIGA", "慢下来系列", "SLOW DOWN", "#b6c2a4", "把速度放慢，才听得见牧场和云的声音。"),
+    ("zsiga-wintergift", "ZSIGA", "收礼物的冬天系列", "WINTER GIFT", "#c7b6a4", "冬天把礼物藏进雪里，等人拆开。"),
+    ("zsiga-sunlight", "ZSIGA", "在日光下系列", "IN SUNLIGHT", "#d9c2a2", "日光落下来，长发和影子一起变软。"),
+    ("sweetbean-holiday", "SWEET BEAN", "属于你的节日系列", "YOUR HOLIDAY", "#e5b7a2", "节日不必等日历，想庆祝的时候就是。"),
+    ("sweetbean-hug", "SWEET BEAN", "爱的抱抱系列", "HUGS OF LOVE", "#e0a9b4", "抱抱不解决所有问题，但可以先接住情绪。"),
 ]
 
 SERIES_BY_PAIR = {(ip, series): key for key, ip, series, _en, _accent, _intro in SERIES_DEFS}
@@ -152,6 +171,40 @@ STORIES = {
     "大耳狗": "云朵一样的大耳朵盖住额头，牛仔外套里藏着一阵软软的风。他站在光里，像刚从三丽鸥的下午茶桌边跑出来。",
     "美乐蒂": "粉色兜帽上落着一点奶油色的光，她把美乐蒂的温柔穿在身上。蝴蝶结认真系好，连影子都变得甜甜的。",
     "猫猫恋人": "星星落在橙色绒毛上，猫猫把心跳藏进一颗小小的星形挂饰，等你靠近才听得见。粉色领结歪歪的，像一句没说完整的情话。",
+    "巴小飞": "红黑小披风被风撑开，他已经在起跑线上，准备把今天跑成一道闪电。",
+    "火腿": "储蓄罐里装着硬币，也装着小小的雄心；他站在毯子上，认真数着下一次出发。",
+    "云朵捕梦手": "软绵绵的帽檐上落着一朵云，她伸手去接，梦里的小东西就这样被轻轻网住。",
+    "星星守夜人": "黄色的星形帽檐低低压着，他替夜色守着最后一颗没有入睡的星星。",
+    "乖乖猪": "粉色的猪猪外套扣得整整齐齐，她把两只小手放在身前，像在认真答应什么。",
+    "趴趴兔": "蓝色兔耳垂到肩膀，他趴在自己的小世界里，连时间经过都放轻了脚步。",
+    "意外发现": "Labubu 在可口可乐瓶盖里发现了一枚小小的惊喜，红白配色像一场冰镇气泡的庆祝。",
+    "沙拉": "绿色便利店的门刚开，他把一份蔬菜沙拉端得高高的，像在展示今天的战利品。",
+    "胆怯羞涩的你": "银灰鹿角从发间伸出来，她把视线放低，连呼吸都在小心地避开陌生。",
+    "根.固远": "墨色的鹿角与裙摆像一笔落定的梅花，她站得很稳，把来处和远方一起扎进土里。",
+    "下雨天": "她戴着透明雨帽，雨滴在帽檐上排队；世界变得模糊，心事反而更清楚。",
+    "终章三重奏": "三个小小的身影围成一圈，黑玫瑰在中间打开最后一幕，像一首歌终于唱到结尾。",
+    "密织的纽带": "粉色的发辫缠着细小的结，她把关系一层层织紧，直到彼此再也不能轻易走散。",
+    "托尼托尼.乔巴": "蓝帽子压着鹿角，乔巴揣着药箱站在毯子上，认真得像在等一位需要帮助的病人。",
+    "撒谎布": "狙击手的护目镜推到额头上，他张嘴准备讲一个不太可靠的故事，眼睛却先笑了。",
+    "特拉法尔加.罗": "斑点帽檐遮住半张脸，他把手术刀藏在袖口，冷静得像一场还没开始的手术。",
+    "甚平": "蓝鲸的斗篷垂在肩上，他站得笔直，像一块不会退让的海。",
+    "罗罗诺亚.佐罗": "绿发从帽檐下翘出来，三把刀安静地收好；他朝前走，方向从来不靠指南针。",
+    "长发": "白色长发像一张还没落笔的纸，她把它包在帽檐里，只露出一点柔软的光。",
+    "午后牧场": "她躺进一片小小的牧场，草丛、栅栏和云都围过来，午后终于慢得像一场午睡。",
+    "吹浪花": "浅金色的头发贴着海面，她鼓起脸颊吹开浪花，把咸咸的风送向更远的地方。",
+    "打闹的精灵": "绿色的小精灵举着树枝，正要去追一只看不见的同伴；森林里的规矩，是玩到天黑。",
+    "护住水源": "她俯身抱住一汪蓝色的水，像抱着一个易碎的梦；头发垂下来，替水面挡住风。",
+    "晾晒衣服": "她把白衬衫一件件挂起，日光穿过布料，连衣角都变得轻飘飘的。",
+    "赖在云里": "她整个人陷进粉白色的云朵里，假装听不见闹钟；今天的世界可以晚一点开始。",
+    "跟紧队伍": "她抱着花束跟在队伍后面，步伐不大，却一次也没有掉队。",
+    "野营的夜晚": "深蓝的斗篷盖住膝盖，她坐在营火旁，等一颗星落进自己的帽檐。",
+    "等待来信": "红色的兜帽在白裙上格外醒目，她守着一封还没到的信，把等待也过成了节日。",
+    "姜饼朋友": "透明的姜饼人挂饰里藏着一整个节日，她把它举高，糖霜的香气就从里面漏出来。",
+    "收到心愿": "红色的圣诞帽子垂着白色绒球，她把礼物袋抱在怀里，像抱住一个刚刚实现的愿望。",
+    "雪花": "她戴着毛茸茸的雪帽，手里捧着雪白的花，冬天的第一片雪落在她肩上，没有化。",
+    "当我感到平静时": "她缩进柔软的壳里，眼睛半闭，周围的声音都退到很远，只剩呼吸在慢慢起伏。",
+    "当我生气时": "红色的小帽子竖起来，她把嘴巴抿紧，愤怒在小小的身体里烧成一团可爱的火。",
+    "跷跷板说": "两个星星人坐在跷跷板两端，一个升起，一个落下；世界暂时找到了它的平衡。",
 }
 
 TITLE_OVERRIDES = {
@@ -164,13 +217,19 @@ def normalize_ip(raw: str) -> str:
     return raw
 
 
+SERIES_ALIASES = {
+    "PIXAR Series Figures系列": "PIXAR联名系列",
+    "PIXAR Series Figures": "PIXAR联名系列",
+    "可口可乐联名": "可口可乐系列",
+    "可口可乐系列": "可口可乐系列",
+}
+
+
 def normalize_series(raw: str) -> str:
     value = raw.strip()
     value = re.sub(r"^[×xX]\s*", "", value)
     value = re.sub(r"\s+", " ", value)
-    if value.endswith("联名"):
-        return value
-    return value
+    return SERIES_ALIASES.get(value, value)
 
 
 def slugify(value: str) -> str:
@@ -191,7 +250,11 @@ def parse_filename(path: Path):
     rest = re.sub(r"\s+", " ", rest).strip()
     if not rest:
         return None
-    matches = list(re.finditer(r"\s*[\.\-]\s*", rest))
+    # Prefer the last hyphen as the series/character separator. A dot is only
+    # used when there is no hyphen, so names like "罗罗诺亚.佐罗" stay intact.
+    matches = list(re.finditer(r"\s*-\s*", rest))
+    if not matches:
+        matches = list(re.finditer(r"\s*\.\s*", rest))
     if matches:
         sep = matches[-1]
         series = rest[:sep.start()].strip(" .-")
@@ -407,6 +470,8 @@ def main():
             "intro": intro,
             "keywords": [ip, IP_CN.get(ip, ip), series_cn, series_en],
         }
+        if key.startswith("monsters-") or key == "labubu-onepiece":
+            series_meta[key]["keywords"] += ["THE MONSTERS", "精灵天团"]
 
     for row in rows:
         pair = (row["ip"], row["series"])
@@ -431,10 +496,26 @@ def main():
     # stable independent numbering: series catalogue order, then source name
     series_rank = {key: index for index, key in enumerate(SERIES_ORDER_KEYS)}
     rows.sort(key=lambda r: (series_rank.get(r["seriesKey"], 999), r["file"].lower()))
-    for index, row in enumerate(rows, start=1):
-        row["no"] = f"{index:03d}"
-        row["code"] = f"JJ-{index:03d}"
-        row["id"] = f"JJ-{index:03d}"
+
+    numbering = {}
+    if NUMBERING.exists():
+        try:
+            numbering = json.loads(NUMBERING.read_text(encoding="utf-8"))
+        except Exception:
+            numbering = {}
+    used = {int(code.split("-")[-1]) for code in numbering.values() if str(code).startswith("JJ-")}
+    next_number = max(used, default=0) + 1
+    for row in rows:
+        code = numbering.get(row["file"])
+        if not code:
+            code = f"JJ-{next_number:03d}"
+            numbering[row["file"]] = code
+            next_number += 1
+        row["code"] = code
+        row["no"] = code.split("-")[-1]
+        row["id"] = code
+    rows.sort(key=lambda r: int(r["code"].split("-")[-1]))
+    NUMBERING.write_text(json.dumps(numbering, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     # clean old demo assets and write the new plate files
     for sub in ["full", "card", "thumb"]:

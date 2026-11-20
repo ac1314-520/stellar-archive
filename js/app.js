@@ -216,6 +216,8 @@ ${known}
       lastMoveX: 0,
       raf: 0,
       lastTime: 0,
+      autoplay: false,
+      autoplayTimer: 0,
     },
     pendingResults: [],
     uploadBusy: false,
@@ -313,7 +315,8 @@ ${known}
       "viewerImage", "viewerSkeleton", "viewerStage", "viewerReflection", "artCard",
       "artRotor", "artCardMat", "viewerFloat", "viewerPrev", "viewerNext",
       "viewerAngle", "viewerZoomIn", "viewerZoomOut", "viewerZoomLabel",
-      "viewerSpin", "viewerInfo", "toastStack", "srLive",
+      "viewerSpin", "viewerAutoplay", "viewerInfo", "toastStack", "srLive",
+      "startSlideshow", "homeAutoplay",
     ];
     ids.forEach((id) => {
       el[id] = document.getElementById(id);
@@ -429,6 +432,8 @@ ${known}
 
     bindHomeEvents();
     bindCatalogEvents();
+    el.startSlideshow?.addEventListener("click", (event) => startCollectionSlideshow(event.currentTarget));
+    el.homeAutoplay?.addEventListener("click", (event) => startCollectionSlideshow(event.currentTarget));
 
     window.addEventListener("popstate", () => {
       const route = getInitialRoute();
@@ -574,13 +579,13 @@ ${known}
     const seen = new Set();
     const preferred = [
       "skullpanda-pony",
-      "labubu-macaron",
+      "labubu-onepiece",
       "dimoo-disney",
+      "hacipupu-secretstory",
+      "zsiga-slow",
+      "sweetbean-holiday",
       "monsters-barbershop",
-      "crybaby-wish",
-      "hacipupu-lostpaws",
-      "twinkle-heartbeat",
-      "skullpanda-garden",
+      "twinkle-123",
     ];
     const orderedKeys = [
       ...preferred.filter((key) => SERIES_ORDER.includes(key)),
@@ -1487,6 +1492,16 @@ ${known}
     });
   }
 
+  async function deleteRecord(id) {
+    const db = await openArchiveDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, "readwrite");
+      tx.objectStore(DB_STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
   async function clearAllRecords() {
     const db = await openArchiveDB();
     return new Promise((resolve, reject) => {
@@ -2042,7 +2057,7 @@ ${known}
      viewer
      ══════════════════════════════════════════════════════════════════════ */
 
-  function openViewer(item, origin, preferredList) {
+  function openViewer(item, origin, preferredList, options = {}) {
     if (!item) return;
     let list = Array.isArray(preferredList) && preferredList.length ? preferredList.slice() : state.filteredItems.slice();
     if (!list.length) list = state.items.slice();
@@ -2054,6 +2069,7 @@ ${known}
     if (index < 0) return;
 
     const viewer = state.viewer;
+    stopViewerAutoplay();
     viewer.open = true;
     viewer.list = list;
     viewer.index = index;
@@ -2082,6 +2098,69 @@ ${known}
     startViewerLoop();
     window.setTimeout(() => el.viewerClose.focus({ preventScroll: true }), 80);
     el.srLive.textContent = `正在欣赏 ${item.title}`;
+    if (options.autoplay) startViewerAutoplay();
+  }
+
+  function startCollectionSlideshow(trigger) {
+    if (!state.items.length) return;
+    const list = state.items.slice().sort((a, b) => {
+      const aNo = Number(String(a.no || "").replace(/\D/g, "")) || 0;
+      const bNo = Number(String(b.no || "").replace(/\D/g, "")) || 0;
+      return aNo - bNo;
+    });
+    const rect = trigger?.getBoundingClientRect?.();
+    const origin = rect && rect.width ? {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+      width: rect.width,
+    } : undefined;
+    openViewer(list[0], origin, list, { autoplay: true });
+  }
+
+  function updateViewerAutoplayUI() {
+    if (!el.viewerAutoplay) return;
+    const active = state.viewer.autoplay;
+    el.viewerAutoplay.setAttribute("aria-pressed", active ? "true" : "false");
+    el.viewerAutoplay.textContent = active ? "暂停轮播" : "自动轮播";
+    el.viewer.classList.toggle("is-autoplay", active);
+  }
+
+  function armViewerAutoplay() {
+    const viewer = state.viewer;
+    window.clearTimeout(viewer.autoplayTimer);
+    if (!viewer.open || !viewer.autoplay) return;
+    viewer.autoplayTimer = window.setTimeout(() => {
+      if (!viewer.open || !viewer.autoplay) return;
+      if (document.hidden) {
+        armViewerAutoplay();
+        return;
+      }
+      if (viewer.list.length > 1) renderViewerItem(viewer.index + 1);
+      armViewerAutoplay();
+    }, 7000);
+  }
+
+  function startViewerAutoplay() {
+    const viewer = state.viewer;
+    if (!viewer.open || viewer.list.length < 2) return;
+    viewer.autoplay = true;
+    updateViewerAutoplayUI();
+    armViewerAutoplay();
+  }
+
+  function stopViewerAutoplay() {
+    const viewer = state.viewer;
+    viewer.autoplay = false;
+    window.clearTimeout(viewer.autoplayTimer);
+    viewer.autoplayTimer = 0;
+    updateViewerAutoplayUI();
+  }
+
+  function toggleViewerAutoplay() {
+    const viewer = state.viewer;
+    if (!viewer.open) return;
+    if (viewer.autoplay) stopViewerAutoplay();
+    else startViewerAutoplay();
   }
 
   function animateViewerEntry(origin) {
@@ -2262,6 +2341,7 @@ ${known}
     const viewer = state.viewer;
     if (!viewer.open || viewer.list.length < 2) return;
     renderViewerItem(viewer.index + direction);
+    if (viewer.autoplay) armViewerAutoplay();
   }
 
   function setViewerZoom(value) {
@@ -2290,6 +2370,7 @@ ${known}
     const { restoreFocus = true } = options;
     viewer.open = false;
     viewer.spinning = false;
+    stopViewerAutoplay();
     cancelAnimationFrame(viewer.raf);
     el.viewer.classList.remove("is-open");
     el.viewer.setAttribute("aria-hidden", "true");
@@ -2310,6 +2391,7 @@ ${known}
     el.viewerPrev.addEventListener("click", () => navigateViewer(-1));
     el.viewerNext.addEventListener("click", () => navigateViewer(1));
     el.viewerSpin.addEventListener("click", toggleViewerSpin);
+    el.viewerAutoplay.addEventListener("click", toggleViewerAutoplay);
     el.viewerZoomIn.addEventListener("click", () => setViewerZoom(state.viewer.zoom + 0.1));
     el.viewerZoomOut.addEventListener("click", () => setViewerZoom(state.viewer.zoom - 0.1));
     el.viewerFav.addEventListener("click", () => {
@@ -2977,6 +3059,13 @@ ${known}
 
     el.confirmImport.addEventListener("click", confirmImport);
     el.clearCustomBtn.addEventListener("click", clearCustomMirror);
+    el.atelierLogStrip.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-delete-custom]");
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      deleteCustomItem(button.dataset.deleteCustom);
+    });
   }
 
   async function handleFiles(files, options = {}) {
@@ -3602,11 +3691,40 @@ ${known}
     el.atelierLogEmpty.hidden = custom.length > 0;
     el.atelierLogStrip.hidden = custom.length === 0;
     el.clearCustomBtn.hidden = custom.length === 0;
-    el.atelierLogStrip.innerHTML = custom.slice(0, 18).map((item) => `
+    el.atelierLogStrip.innerHTML = custom.map((item) => `
       <div class="log-thumb" title="${escapeHTML(item.title)} · ${escapeHTML(item.series)}">
         <img src="${escapeHTML(item.thumb)}" alt="${escapeHTML(item.title)}" loading="lazy">
         <span>${escapeHTML(item.no)}</span>
+        <button class="log-thumb__delete" type="button" data-delete-custom="${escapeHTML(item.id)}" aria-label="只删除 ${escapeHTML(item.title)}" title="只删除这一张">
+          <span aria-hidden="true">×</span>
+        </button>
       </div>`).join("");
+  }
+
+  async function deleteCustomItem(id) {
+    const item = state.customItems.find((candidate) => candidate.id === id);
+    if (!item) return;
+    const confirmed = window.confirm(`只删除「${item.title}」这一张？其它 ${Math.max(0, state.customItems.length - 1)} 张会保留。`);
+    if (!confirmed) return;
+    try {
+      await deleteRecord(item.id);
+    } catch (error) {
+      console.warn(error);
+      showToast("这一张删除失败，请稍后重试。");
+      return;
+    }
+    if (state.viewer.open) closeViewer({ restoreFocus: false });
+    for (const url of [item.thumb, item.src]) {
+      if (url && state.objectUrls.has(url)) {
+        try { URL.revokeObjectURL(url); } catch {}
+        state.objectUrls.delete(url);
+      }
+    }
+    state.favourites.delete(item.id);
+    state.customItems = state.customItems.filter((candidate) => candidate.id !== item.id);
+    saveFavourites();
+    refreshDataViews();
+    showToast(`已删除「${item.title}」，其它本地照片保留。`);
   }
 
   async function clearCustomMirror() {

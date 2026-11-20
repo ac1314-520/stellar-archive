@@ -139,6 +139,8 @@ ${known}
     filteredItems: [],
     home: {
       items: [],
+      batches: [],
+      round: 0,
       index: 0,
       switching: false,
       timer: 0,
@@ -229,6 +231,13 @@ ${known}
 
   const el = {};
 
+  const collectionAutoScroll = {
+    active: false,
+    timer: 0,
+    lastTime: 0,
+    speed: 0,
+  };
+
   /* ══════════════════════════════════════════════════════════════════════
      boot
      ══════════════════════════════════════════════════════════════════════ */
@@ -285,7 +294,7 @@ ${known}
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
       "topbar", "navCount", "homeView", "homeFeatureButton", "homeFeatureImage",
-      "homeFeatureIndex", "homeFeatureGhost", "homeFeatureNo", "homeFeatureTitle",
+      "homeFeatureIndex", "homeFeatureRound", "homeFeatureGhost", "homeFeatureNo", "homeFeatureTitle",
       "homeFeatureSeries", "homeFeatureCollection", "homeFeatureProgress",
       "homeFeatureRail", "homePrev", "homeNext", "homePieceCount", "homeSeriesCount",
       "heroCount", "heroSeriesCount",
@@ -298,6 +307,7 @@ ${known}
       "resultCount", "collectionCount", "collectionSeries", "collectionRare",
       "seriesFilters", "rarityFilters", "filterFavourite", "favCount",
       "activeFilters", "searchInput", "sortSelect", "resetFilters",
+      "collectionFilterToggle", "activeFilterCount", "autoscrollToggle", "autoscrollProgress",
       "atelierView", "dropzone", "fileInput", "browseBtn",
       "scanPanel", "scanGrid", "scanBar", "scanProgressLabel", "scanCaption",
       "identifyResults", "resultGrid", "clearResults", "confirmImport", "importCount",
@@ -434,6 +444,13 @@ ${known}
     bindCatalogEvents();
     el.startSlideshow?.addEventListener("click", (event) => startCollectionSlideshow(event.currentTarget));
     el.homeAutoplay?.addEventListener("click", (event) => startCollectionSlideshow(event.currentTarget));
+    el.collectionFilterToggle?.addEventListener("click", toggleCollectionFilters);
+    el.autoscrollToggle?.addEventListener("click", toggleCollectionAutoScroll);
+    for (const eventName of ["wheel", "touchstart", "pointerdown"]) {
+      el.collectionView?.addEventListener(eventName, () => {
+        if (collectionAutoScroll.active) stopCollectionAutoScroll({ silent: true });
+      }, { passive: true });
+    }
 
     window.addEventListener("popstate", () => {
       const route = getInitialRoute();
@@ -501,6 +518,8 @@ ${known}
     state.route = target;
     document.body.dataset.view = target;
 
+    stopCollectionAutoScroll({ silent: true });
+    closeCollectionFilters();
     for (const view of el.views) {
       const active = view.dataset.view === target;
       view.hidden = !active;
@@ -529,6 +548,8 @@ ${known}
     } else if (target === "atelier") {
       renderAtelierLog();
     }
+
+    if (el.autoscrollToggle) el.autoscrollToggle.hidden = target !== "collection";
 
     const labels = { home: "展厅", collection: "藏品馆", catalog: "图鉴", atelier: "识藏室" };
     el.srLive.textContent = `已进入${labels[target] || "展厅"}`;
@@ -574,9 +595,13 @@ ${known}
     return item.src || item.thumb || gridImageFor(item);
   }
 
-  function getHomeItems() {
-    const selected = [];
-    const seen = new Set();
+  const HOME_BATCH_SIZE = 8;
+
+  function itemNumber(item) {
+    return Number(String(item?.code || item?.no || "").replace(/\D/g, "")) || 0;
+  }
+
+  function buildHomeBatches() {
     const preferred = [
       "skullpanda-pony",
       "labubu-onepiece",
@@ -591,35 +616,65 @@ ${known}
       ...preferred.filter((key) => SERIES_ORDER.includes(key)),
       ...SERIES_ORDER.filter((key) => !preferred.includes(key)),
     ];
+    const first = [];
+    const seen = new Set();
     for (const key of orderedKeys) {
       const item = state.items.find((candidate) => candidate.seriesKey === key);
       if (!item || seen.has(item.id)) continue;
-      selected.push(item);
+      first.push(item);
       seen.add(item.id);
-      if (selected.length >= 8) break;
+      if (first.length >= HOME_BATCH_SIZE) break;
     }
-    if (selected.length < 8) {
+    if (first.length < HOME_BATCH_SIZE) {
       for (const item of state.items) {
         if (seen.has(item.id)) continue;
-        selected.push(item);
+        first.push(item);
         seen.add(item.id);
-        if (selected.length >= 8) break;
+        if (first.length >= HOME_BATCH_SIZE) break;
       }
     }
-    return selected;
+
+    const rest = state.items
+      .filter((item) => !seen.has(item.id))
+      .slice()
+      .sort((a, b) => itemNumber(a) - itemNumber(b));
+    const batches = first.length ? [first] : [];
+    for (let index = 0; index < rest.length; index += HOME_BATCH_SIZE) {
+      batches.push(rest.slice(index, index + HOME_BATCH_SIZE));
+    }
+    return batches;
   }
 
   function renderHome() {
-    const items = getHomeItems();
+    const batches = buildHomeBatches();
+    state.home.batches = batches;
+    state.home.round = clamp(state.home.round, 0, Math.max(0, batches.length - 1));
+    const items = batches[state.home.round] || [];
     state.home.items = items;
     state.home.index = clamp(state.home.index, 0, Math.max(0, items.length - 1));
     updateHomeFeature(false);
   }
 
-  function setHomeIndex(index, animate = true) {
-    if (!state.home.items.length) return;
-    state.home.index = ((index % state.home.items.length) + state.home.items.length) % state.home.items.length;
+  function changeHomeBatch(direction, animate = true) {
+    const batches = state.home.batches;
+    if (batches.length < 2) return;
+    state.home.round = (state.home.round + direction + batches.length) % batches.length;
+    state.home.items = batches[state.home.round];
+    state.home.index = direction > 0 ? 0 : Math.max(0, state.home.items.length - 1);
     updateHomeFeature(animate);
+  }
+
+  function setHomeIndex(index, animate = true) {
+    const items = state.home.items;
+    if (!items.length) return;
+    if (index < 0) {
+      changeHomeBatch(-1, animate);
+    } else if (index >= items.length) {
+      changeHomeBatch(1, animate);
+    } else {
+      state.home.index = index;
+      updateHomeFeature(animate);
+    }
     startHomeTimer();
   }
 
@@ -648,6 +703,9 @@ ${known}
       el.homeFeatureImage.src = src;
       el.homeFeatureImage.alt = `${item.series} ${item.title}`;
       if (el.homeFeatureIndex) el.homeFeatureIndex.textContent = `${index} / ${total}`;
+      if (el.homeFeatureRound) {
+        el.homeFeatureRound.textContent = `ROUND ${String(state.home.round + 1).padStart(2, "0")} / ${String(Math.max(1, state.home.batches.length)).padStart(2, "0")}`;
+      }
       if (el.homeFeatureGhost) el.homeFeatureGhost.textContent = item.no || "001";
       if (el.homeFeatureNo) el.homeFeatureNo.textContent = `NO. ${item.code || item.no || "JJ-001"}`;
       if (el.homeFeatureTitle) el.homeFeatureTitle.textContent = item.title;
@@ -717,8 +775,12 @@ ${known}
       if (state.home.switching) return;
       const items = state.home.items;
       if (items.length < 2) return;
-      state.home.index = (state.home.index + 1) % items.length;
-      updateHomeFeature(true);
+      if (state.home.index < items.length - 1) {
+        state.home.index += 1;
+        updateHomeFeature(true);
+      } else {
+        changeHomeBatch(1, true);
+      }
     }, 6800);
   }
 
@@ -1864,6 +1926,109 @@ ${known}
     updateFilterUI();
   }
 
+  function activeCollectionFilterCount() {
+    return (state.filters.series !== "all" ? 1 : 0)
+      + (state.filters.rarity !== "all" ? 1 : 0)
+      + (state.filters.favourite ? 1 : 0);
+  }
+
+  function updateCollectionFilterCount() {
+    if (!el.activeFilterCount) return;
+    const count = activeCollectionFilterCount();
+    el.activeFilterCount.textContent = String(count);
+    el.activeFilterCount.classList.toggle("is-empty", count === 0);
+    el.collectionFilterToggle?.classList.toggle("has-filters", count > 0);
+  }
+
+  function toggleCollectionFilters() {
+    if (!el.collectionView) return;
+    stopCollectionAutoScroll({ silent: true });
+    const open = !el.collectionView.classList.contains("is-filter-open");
+    el.collectionView.classList.toggle("is-filter-open", open);
+    el.collectionFilterToggle?.setAttribute("aria-expanded", String(open));
+    if (open) {
+      el.collectionView.scrollTo({ top: 0, behavior: "smooth" });
+      window.setTimeout(() => $("[data-series-select]", el.seriesFilters)?.focus({ preventScroll: true }), 250);
+    }
+  }
+
+  function closeCollectionFilters() {
+    el.collectionView?.classList.remove("is-filter-open");
+    el.collectionFilterToggle?.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleCollectionAutoScroll() {
+    if (collectionAutoScroll.active) stopCollectionAutoScroll();
+    else startCollectionAutoScroll();
+  }
+
+  function startCollectionAutoScroll() {
+    if (state.route !== "collection" || !el.collectionView) return;
+    closeCollectionFilters();
+    const view = el.collectionView;
+    const max = view.scrollHeight - view.clientHeight;
+    if (max <= 10) return;
+
+    const cards = $$(".plate", el.collectionGrid);
+    const firstTop = cards[0]?.offsetTop || 0;
+    const nextRow = cards.find((card) => card.offsetTop > firstTop);
+    const rowHeight = nextRow ? nextRow.offsetTop - firstTop : (cards[0]?.offsetHeight || 420) + 20;
+    collectionAutoScroll.speed = clamp(rowHeight / 7, 18, 120);
+    collectionAutoScroll.active = true;
+    collectionAutoScroll.lastTime = performance.now();
+    view.classList.add("is-autoscrolling");
+    el.autoscrollToggle?.setAttribute("aria-pressed", "true");
+    if (el.autoscrollToggle) {
+      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "暂停上滑";
+      el.autoscrollToggle.querySelector("em").textContent = "录屏中";
+    }
+    updateAutoscrollProgress();
+    window.clearInterval(collectionAutoScroll.timer);
+    collectionAutoScroll.timer = window.setInterval(() => tickCollectionAutoScroll(performance.now()), 16);
+  }
+
+  function tickCollectionAutoScroll(now) {
+    if (!collectionAutoScroll.active || state.route !== "collection") return;
+    const view = el.collectionView;
+    if (!view) return;
+    const dt = Math.min(0.05, Math.max(0, (now - collectionAutoScroll.lastTime) / 1000));
+    collectionAutoScroll.lastTime = now;
+    const max = view.scrollHeight - view.clientHeight;
+    if (max <= 0) {
+      stopCollectionAutoScroll({ silent: true });
+      return;
+    }
+    const next = Math.min(max, view.scrollTop + collectionAutoScroll.speed * dt);
+    view.scrollTop = next;
+    updateAutoscrollProgress();
+    if (next >= max - 0.5) {
+      stopCollectionAutoScroll({ atEnd: true });
+    }
+  }
+
+  function updateAutoscrollProgress() {
+    if (!el.autoscrollProgress || !el.collectionView) return;
+    const max = el.collectionView.scrollHeight - el.collectionView.clientHeight;
+    const ratio = max > 0 ? clamp(el.collectionView.scrollTop / max, 0, 1) : 0;
+    el.autoscrollProgress.style.width = `${(ratio * 100).toFixed(2)}%`;
+  }
+
+  function stopCollectionAutoScroll(options = {}) {
+    const { silent = false, atEnd = false } = options;
+    const wasActive = collectionAutoScroll.active;
+    collectionAutoScroll.active = false;
+    window.clearInterval(collectionAutoScroll.timer);
+    collectionAutoScroll.timer = 0;
+    el.collectionView?.classList.remove("is-autoscrolling");
+    el.autoscrollToggle?.setAttribute("aria-pressed", "false");
+    if (el.autoscrollToggle) {
+      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "自动上滑";
+      el.autoscrollToggle.querySelector("em").textContent = "7s / 行";
+    }
+    if (atEnd && !silent) showToast("已经滑到馆尾，录屏可以在这里收住。");
+    else if (wasActive && !silent) showToast("已暂停自动上滑。");
+  }
+
   function updateFilterUI() {
     const seriesSelect = $("[data-series-select]", el.seriesFilters);
     if (seriesSelect) seriesSelect.value = state.filters.series;
@@ -1885,6 +2050,7 @@ ${known}
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", active ? "true" : "false");
     });
+    updateCollectionFilterCount();
   }
 
   function renderAtelierSeriesList() {
@@ -2059,6 +2225,7 @@ ${known}
 
   function openViewer(item, origin, preferredList, options = {}) {
     if (!item) return;
+    stopCollectionAutoScroll({ silent: true });
     let list = Array.isArray(preferredList) && preferredList.length ? preferredList.slice() : state.filteredItems.slice();
     if (!list.length) list = state.items.slice();
     let index = list.findIndex((candidate) => candidate.id === item.id);

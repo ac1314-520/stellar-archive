@@ -14,19 +14,19 @@
   <meta property="og:title" content="星屿藏馆 · 晶晶的私人藏品馆">
   <meta property="og:description" content="晶晶的私人泡泡玛特藏品馆：84 件真实藏品、38 个系列、独立编号与完整图鉴。黑金展厅、金线装裱、自动轮播与 360° 欣赏。">
   <meta property="og:url" content="https://ac1314-520.github.io/stellar-archive/">
-  <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg?v=20261120g">
+  <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg?v=20261120h">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="星屿藏馆：黑金展厅中的泡泡玛特私人藏品">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="星屿藏馆 · 晶晶的私人藏品馆">
   <meta name="twitter:description" content="晶晶的私人泡泡玛特藏品馆：84 件真实藏品、38 个系列、独立编号与完整图鉴。黑金展厅、金线装裱、自动轮播与 360° 欣赏。">
-  <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg?v=20261120g">
+  <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg?v=20261120h">
   <title>星屿藏馆 · 晶晶的私人藏品馆</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261120g">
+  <link rel="stylesheet" href="css/styles.css?v=20261120h">
 </head>
 <body>
   <a class="skip-link" href="#collection">跳到藏品馆</a>
@@ -152,6 +152,7 @@
         <div class="home-exhibit">
           <div class="home-exhibit__top">
             <span>FEATURED OBJECT <em>精选展品</em></span>
+            <span class="home-exhibit__round" id="homeFeatureRound">ROUND 01 / 11</span>
             <span id="homeFeatureIndex">01 / 08</span>
           </div>
           <button class="home-frame" id="homeFeatureButton" type="button" aria-label="欣赏精选展品">
@@ -268,6 +269,11 @@
                 <input id="searchInput" type="search" placeholder="搜索角色、系列或藏品名" autocomplete="off" aria-label="搜索藏品">
                 <kbd>/</kbd>
               </label>
+              <button class="filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="false" aria-controls="seriesFilters">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M4.5 8h7M6.5 12h3"/></svg>
+                <span>筛选</span>
+                <b id="activeFilterCount">0</b>
+              </button>
               <button class="slideshow-trigger" id="startSlideshow" type="button" title="自动轮播全部藏品，每件停留 7 秒">
                 <span class="slideshow-trigger__play" aria-hidden="true">▶</span>
                 <span>自动轮播</span>
@@ -496,6 +502,13 @@
       </div>
     </section>
   </main>
+
+  <button class="autoscroll-fab" id="autoscrollToggle" type="button" aria-pressed="false" hidden>
+    <span class="autoscroll-fab__icon" aria-hidden="true">↑</span>
+    <span class="autoscroll-fab__text">自动上滑</span>
+    <em>7s / 行</em>
+    <i class="autoscroll-fab__progress" aria-hidden="true"><b id="autoscrollProgress"></b></i>
+  </button>
 
     <div class="catalog-dialog" id="catalogDialog" role="dialog" aria-modal="true" aria-labelledby="catalogDialogTitle" hidden>
       <button class="catalog-dialog__veil" type="button" data-catalog-close aria-label="关闭图鉴详情"></button>
@@ -735,8 +748,8 @@
     <div class="noscript">星屿藏馆需要 JavaScript 才能打开展厅。请在浏览器中启用 JavaScript 后重新打开。</div>
   </noscript>
 
-  <script src="js/series.js?v=20261120g"></script>
-  <script src="js/collection-data.js?v=20261120g"></script>
-  <script src="js/app.js?v=20261120g"></script>
+  <script src="js/series.js?v=20261120h"></script>
+  <script src="js/collection-data.js?v=20261120h"></script>
+  <script src="js/app.js?v=20261120h"></script>
 </body>
 </html>

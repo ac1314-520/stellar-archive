@@ -8945,3 +8945,23 @@ body.catalog-open {
     font-size: 6px;
   }
 }
+
+/* Auto-scroll controls sit above the artwork, not over the cards. */
+.autoscroll-fab {
+  top: calc(var(--topbar-h) + 14px);
+  bottom: auto;
+}
+
+.autoscroll-fab__progress b {
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.1s linear;
+}
+
+@media (max-width: 760px) {
+  .autoscroll-fab {
+    top: calc(var(--topbar-h) + 9px);
+    bottom: auto;
+  }
+}

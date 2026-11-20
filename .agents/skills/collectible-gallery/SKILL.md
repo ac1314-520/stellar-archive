@@ -66,9 +66,10 @@ frames, clear hierarchy, and motion that is calm enough to record.
 
 ## 4. Interaction
 
-- **Auto-scroll**: a fixed toggle labelled “自动上滑”, with a pause state, a
-  visible progress line, and about 7 seconds per card row. Stop at the end and
-  report it. Any manual wheel/touch/pointer input pauses it.
+- **Auto-scroll**: a fixed toggle near the top labelled “自动滚动”, with a
+  pause state, a visible progress line, and about 3 seconds per card row.
+  Preload covers, use transform-based progress, stop at the end and report it.
+  Any real wheel/touch/pointer input pauses it.
 - **Auto-slideshow**: viewer-level next-item rotation, about 7 seconds per
   item, with pause/resume, AUTO indicator, and manual arrows resetting the
   timer. Use it for recording; do not make the gallery itself jump items.

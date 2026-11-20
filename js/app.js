@@ -236,7 +236,10 @@ ${known}
     timer: 0,
     lastTime: 0,
     speed: 0,
+    max: 0,
+    startedAt: 0,
   };
+  const preloadedCovers = new Set();
 
   /* ══════════════════════════════════════════════════════════════════════
      boot
@@ -448,7 +451,11 @@ ${known}
     el.autoscrollToggle?.addEventListener("click", toggleCollectionAutoScroll);
     for (const eventName of ["wheel", "touchstart", "pointerdown"]) {
       el.collectionView?.addEventListener(eventName, () => {
-        if (collectionAutoScroll.active) stopCollectionAutoScroll({ silent: true });
+        // Ignore the opening tap for a moment; only a real page interaction
+        // should pause the recording scroll.
+        if (collectionAutoScroll.active && performance.now() - collectionAutoScroll.startedAt > 450) {
+          stopCollectionAutoScroll({ silent: true });
+        }
       }, { passive: true });
     }
 
@@ -543,6 +550,7 @@ ${known}
       startHomeTimer();
     } else if (target === "collection") {
       renderCollection();
+      window.setTimeout(preloadCollectionCovers, 100);
     } else if (target === "catalog") {
       renderCatalog();
     } else if (target === "atelier") {
@@ -1968,18 +1976,21 @@ ${known}
     const view = el.collectionView;
     const max = view.scrollHeight - view.clientHeight;
     if (max <= 10) return;
+    if (max - view.scrollTop < 80) view.scrollTop = 0;
 
     const cards = $$(".plate", el.collectionGrid);
     const firstTop = cards[0]?.offsetTop || 0;
     const nextRow = cards.find((card) => card.offsetTop > firstTop);
     const rowHeight = nextRow ? nextRow.offsetTop - firstTop : (cards[0]?.offsetHeight || 420) + 20;
-    collectionAutoScroll.speed = clamp(rowHeight / 7, 18, 120);
+    collectionAutoScroll.speed = clamp(rowHeight / 3, 32, 260);
+    collectionAutoScroll.max = max;
     collectionAutoScroll.active = true;
+    collectionAutoScroll.startedAt = performance.now();
     collectionAutoScroll.lastTime = performance.now();
     view.classList.add("is-autoscrolling");
     el.autoscrollToggle?.setAttribute("aria-pressed", "true");
     if (el.autoscrollToggle) {
-      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "暂停上滑";
+      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "暂停滚动";
       el.autoscrollToggle.querySelector("em").textContent = "录屏中";
     }
     updateAutoscrollProgress();
@@ -1993,7 +2004,7 @@ ${known}
     if (!view) return;
     const dt = Math.min(0.05, Math.max(0, (now - collectionAutoScroll.lastTime) / 1000));
     collectionAutoScroll.lastTime = now;
-    const max = view.scrollHeight - view.clientHeight;
+    const max = collectionAutoScroll.max || (view.scrollHeight - view.clientHeight);
     if (max <= 0) {
       stopCollectionAutoScroll({ silent: true });
       return;
@@ -2008,9 +2019,28 @@ ${known}
 
   function updateAutoscrollProgress() {
     if (!el.autoscrollProgress || !el.collectionView) return;
-    const max = el.collectionView.scrollHeight - el.collectionView.clientHeight;
+    const max = collectionAutoScroll.max || 1;
     const ratio = max > 0 ? clamp(el.collectionView.scrollTop / max, 0, 1) : 0;
-    el.autoscrollProgress.style.width = `${(ratio * 100).toFixed(2)}%`;
+    el.autoscrollProgress.style.transform = `scaleX(${ratio.toFixed(4)})`;
+  }
+
+  function preloadCollectionCovers() {
+    const urls = state.items
+      .map((item) => gridImageFor(item))
+      .filter((url) => url && !preloadedCovers.has(url));
+    let cursor = 0;
+    const loadNext = () => {
+      if (cursor >= urls.length) return;
+      const url = urls[cursor];
+      cursor += 1;
+      preloadedCovers.add(url);
+      const image = new Image();
+      const finish = () => window.setTimeout(loadNext, 45);
+      image.onload = finish;
+      image.onerror = finish;
+      image.src = url;
+    };
+    for (let index = 0; index < 4; index += 1) loadNext();
   }
 
   function stopCollectionAutoScroll(options = {}) {
@@ -2022,11 +2052,12 @@ ${known}
     el.collectionView?.classList.remove("is-autoscrolling");
     el.autoscrollToggle?.setAttribute("aria-pressed", "false");
     if (el.autoscrollToggle) {
-      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "自动上滑";
-      el.autoscrollToggle.querySelector("em").textContent = "7s / 行";
+      el.autoscrollToggle.querySelector(".autoscroll-fab__text").textContent = "自动滚动";
+      el.autoscrollToggle.querySelector("em").textContent = "3s / 行";
     }
-    if (atEnd && !silent) showToast("已经滑到馆尾，录屏可以在这里收住。");
-    else if (wasActive && !silent) showToast("已暂停自动上滑。");
+    collectionAutoScroll.max = 0;
+    if (atEnd && !silent) showToast("已经滚动到馆尾，录屏可以在这里收住。");
+    else if (wasActive && !silent) showToast("已暂停自动滚动。");
   }
 
   function updateFilterUI() {

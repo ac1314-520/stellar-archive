@@ -66,10 +66,11 @@ frames, clear hierarchy, and motion that is calm enough to record.
 
 ## 4. Interaction
 
-- **Auto-scroll**: a fixed toggle near the top labelled “自动滚动”, with a
-  pause state, a visible progress line, and about 3 seconds per card row.
-  Preload covers, use transform-based progress, stop at the end and report it.
-  Any real wheel/touch/pointer input pauses it.
+- **Auto-scroll**: an inline toolbar control at the top labelled “自动滚动”,
+  not a floating overlay. It scrolls away with the page so it never covers
+  artwork. Use about 3 seconds per card row, rAF time-stepping, stable card
+  heights, transform-based progress, and stop at the end with a clear report.
+  Any real wheel/touch/pointer input pauses it. Do not preload all covers.
 - **Auto-slideshow**: viewer-level next-item rotation, about 7 seconds per
   item, with pause/resume, AUTO indicator, and manual arrows resetting the
   timer. Use it for recording; do not make the gallery itself jump items.

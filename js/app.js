@@ -233,13 +233,18 @@ ${known}
 
   const collectionAutoScroll = {
     active: false,
+    raf: 0,
     timer: 0,
+    watchdog: 0,
+    mode: "",
+    frames: 0,
+    startScroll: 0,
     lastTime: 0,
     speed: 0,
     max: 0,
     startedAt: 0,
   };
-  const preloadedCovers = new Set();
+  let plateIntrinsicTimer = 0;
 
   /* ══════════════════════════════════════════════════════════════════════
      boot
@@ -473,6 +478,15 @@ ${known}
     });
 
     window.addEventListener("resize", updateTopbarState);
+    window.addEventListener("resize", () => {
+      window.clearTimeout(plateIntrinsicTimer);
+      plateIntrinsicTimer = window.setTimeout(syncPlateIntrinsicSize, 140);
+      if (collectionAutoScroll.active) {
+        collectionAutoScroll.max = el.collectionView
+          ? el.collectionView.scrollHeight - el.collectionView.clientHeight
+          : 0;
+      }
+    });
 
     document.addEventListener("keydown", onGlobalKeydown);
     bindViewerEvents();
@@ -550,7 +564,6 @@ ${known}
       startHomeTimer();
     } else if (target === "collection") {
       renderCollection();
-      window.setTimeout(preloadCollectionCovers, 100);
     } else if (target === "catalog") {
       renderCatalog();
     } else if (target === "atelier") {
@@ -1987,6 +2000,10 @@ ${known}
     collectionAutoScroll.active = true;
     collectionAutoScroll.startedAt = performance.now();
     collectionAutoScroll.lastTime = performance.now();
+    collectionAutoScroll.startScroll = view.scrollTop;
+    collectionAutoScroll.frames = 0;
+    collectionAutoScroll.mode = "raf";
+    document.body.classList.add("is-autoscrolling");
     view.classList.add("is-autoscrolling");
     el.autoscrollToggle?.setAttribute("aria-pressed", "true");
     if (el.autoscrollToggle) {
@@ -1994,12 +2011,33 @@ ${known}
       el.autoscrollToggle.querySelector("em").textContent = "录屏中";
     }
     updateAutoscrollProgress();
+    window.cancelAnimationFrame(collectionAutoScroll.raf);
     window.clearInterval(collectionAutoScroll.timer);
-    collectionAutoScroll.timer = window.setInterval(() => tickCollectionAutoScroll(performance.now()), 16);
+    window.clearTimeout(collectionAutoScroll.watchdog);
+    collectionAutoScroll.raf = window.requestAnimationFrame(tickCollectionAutoScroll);
+    // If a webview throttles rAF instead of dropping it (some in-app
+    // browsers do), switch to a timer loop rather than appearing frozen.
+    collectionAutoScroll.watchdog = window.setTimeout(() => {
+      if (!collectionAutoScroll.active || collectionAutoScroll.mode !== "raf") return;
+      if (Math.abs(view.scrollTop - collectionAutoScroll.startScroll) > 2) return;
+      collectionAutoScroll.mode = "timer";
+      window.cancelAnimationFrame(collectionAutoScroll.raf);
+      collectionAutoScroll.lastTime = performance.now();
+      collectionAutoScroll.timer = window.setInterval(() => advanceCollectionAutoScroll(performance.now()), 16);
+    }, 260);
   }
 
   function tickCollectionAutoScroll(now) {
     if (!collectionAutoScroll.active || state.route !== "collection") return;
+    if (collectionAutoScroll.mode !== "raf") return;
+    collectionAutoScroll.frames += 1;
+    advanceCollectionAutoScroll(now);
+    if (collectionAutoScroll.active && collectionAutoScroll.mode === "raf") {
+      collectionAutoScroll.raf = window.requestAnimationFrame(tickCollectionAutoScroll);
+    }
+  }
+
+  function advanceCollectionAutoScroll(now) {
     const view = el.collectionView;
     if (!view) return;
     const dt = Math.min(0.05, Math.max(0, (now - collectionAutoScroll.lastTime) / 1000));
@@ -2024,31 +2062,19 @@ ${known}
     el.autoscrollProgress.style.transform = `scaleX(${ratio.toFixed(4)})`;
   }
 
-  function preloadCollectionCovers() {
-    const urls = state.items
-      .map((item) => gridImageFor(item))
-      .filter((url) => url && !preloadedCovers.has(url));
-    let cursor = 0;
-    const loadNext = () => {
-      if (cursor >= urls.length) return;
-      const url = urls[cursor];
-      cursor += 1;
-      preloadedCovers.add(url);
-      const image = new Image();
-      const finish = () => window.setTimeout(loadNext, 45);
-      image.onload = finish;
-      image.onerror = finish;
-      image.src = url;
-    };
-    for (let index = 0; index < 4; index += 1) loadNext();
-  }
 
   function stopCollectionAutoScroll(options = {}) {
     const { silent = false, atEnd = false } = options;
     const wasActive = collectionAutoScroll.active;
     collectionAutoScroll.active = false;
+    collectionAutoScroll.mode = "";
+    window.cancelAnimationFrame(collectionAutoScroll.raf);
     window.clearInterval(collectionAutoScroll.timer);
+    window.clearTimeout(collectionAutoScroll.watchdog);
+    collectionAutoScroll.raf = 0;
     collectionAutoScroll.timer = 0;
+    collectionAutoScroll.watchdog = 0;
+    document.body.classList.remove("is-autoscrolling");
     el.collectionView?.classList.remove("is-autoscrolling");
     el.autoscrollToggle?.setAttribute("aria-pressed", "false");
     if (el.autoscrollToggle) {
@@ -2185,6 +2211,25 @@ ${known}
     renderActiveFilterChips();
     updateFilterUI();
     updateCounts();
+    syncPlateIntrinsicSize();
+    window.clearTimeout(plateIntrinsicTimer);
+    plateIntrinsicTimer = window.setTimeout(syncPlateIntrinsicSize, 420);
+  }
+
+  function syncPlateIntrinsicSize() {
+    const grid = el.collectionGrid;
+    const first = grid?.querySelector(".plate");
+    if (!grid || !first) return;
+    window.requestAnimationFrame(() => {
+      // content-visibility can return the estimated placeholder height while
+      // the view is still being switched in. Force one real measurement so the
+      // long collection does not resize rows while it auto-scrolls.
+      const previous = first.style.contentVisibility;
+      first.style.contentVisibility = "visible";
+      const height = Math.round(first.offsetHeight);
+      first.style.contentVisibility = previous;
+      if (height > 80) grid.style.setProperty("--plate-intrinsic", `${height}px`);
+    });
   }
 
   function renderActiveFilterChips() {

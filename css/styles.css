@@ -8965,3 +8965,153 @@ body.catalog-open {
     bottom: auto;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COLLECTION · inline recording control, fast mobile scroll
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.toolbar-scroll {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 11px 4px;
+  border: 1px solid rgba(231, 194, 147, 0.24);
+  color: rgba(213, 196, 173, 0.72);
+  background: rgba(9, 7, 6, 0.5);
+  font-family: var(--serif);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.3s, border-color 0.3s, background 0.3s;
+}
+
+.toolbar-scroll:hover {
+  color: var(--gold-bright);
+  border-color: rgba(231, 194, 147, 0.48);
+}
+
+.toolbar-scroll .autoscroll-fab__icon {
+  width: 20px;
+  height: 20px;
+  border-color: rgba(205, 169, 109, 0.3);
+  font-size: 11px;
+}
+
+.toolbar-scroll em {
+  color: rgba(152, 135, 111, 0.48);
+  font-family: var(--sans);
+  font-size: 6px;
+  font-style: normal;
+  letter-spacing: 0.08em;
+}
+
+.toolbar-scroll .autoscroll-fab__progress {
+  right: 11px;
+  bottom: 3px;
+  left: 11px;
+  background: rgba(231, 194, 147, 0.1);
+}
+
+.toolbar-scroll[aria-pressed="true"] {
+  color: #150e08;
+  border-color: var(--gold);
+  background: var(--gold);
+}
+
+.toolbar-scroll[aria-pressed="true"] .autoscroll-fab__icon {
+  color: #150e08;
+  border-color: rgba(21, 14, 8, 0.35);
+}
+
+.toolbar-scroll[aria-pressed="true"] em {
+  color: rgba(21, 14, 8, 0.55);
+}
+
+.toolbar-scroll[aria-pressed="true"] .autoscroll-fab__progress {
+  background: rgba(21, 14, 8, 0.16);
+}
+
+.toolbar-scroll[aria-pressed="true"] .autoscroll-fab__progress b {
+  background: #150e08;
+}
+
+.plate {
+  contain-intrinsic-size: var(--plate-intrinsic, 330px);
+}
+
+@media (max-width: 760px) {
+  /* The tablet-size grain and backdrop blurs are the main scroll cost. */
+  .grain {
+    display: none;
+  }
+
+  .topbar.is-scrolled,
+  .topbar.is-scrolled::before,
+  .topnav {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .topbar.is-scrolled {
+    background: rgba(8, 4, 6, 0.96);
+  }
+
+  .plate__index,
+  .plate__hover,
+  .plate__fav {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .collection-toolbar .toolbar-scroll {
+    order: 3;
+    flex: 1;
+    justify-content: center;
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
+  .collection-toolbar .slideshow-trigger {
+    order: 4;
+  }
+
+  .collection-toolbar .toolbar-meta {
+    order: 5;
+  }
+}
+
+body.is-autoscrolling .grain {
+  display: none;
+}
+
+body.is-autoscrolling .topbar.is-scrolled,
+body.is-autoscrolling .topbar.is-scrolled::before,
+body.is-autoscrolling .topnav {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+body.is-autoscrolling .plate__index,
+body.is-autoscrolling .plate__hover,
+body.is-autoscrolling .plate__fav {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (max-width: 760px) {
+  .plate {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  /* 84 cards are cheap to lay out; content-visibility caused scroll-height
+     jumps while images decoded, which read as stutter. */
+  .plate {
+    content-visibility: visible;
+    contain-intrinsic-size: auto;
+  }
+}

@@ -296,7 +296,7 @@ ${known}
       "resultCount", "collectionCount", "collectionSeries", "collectionRare",
       "seriesFilters", "rarityFilters", "filterFavourite", "favCount",
       "activeFilters", "searchInput", "sortSelect", "resetFilters",
-      "atelierView", "dropzone", "fileInput", "browseBtn", "demoIdentifyBtn",
+      "atelierView", "dropzone", "fileInput", "browseBtn",
       "scanPanel", "scanGrid", "scanBar", "scanProgressLabel", "scanCaption",
       "identifyResults", "resultGrid", "clearResults", "confirmImport", "importCount",
       "atelierLog", "atelierLogEmpty", "atelierLogStrip", "customPhotoCount", "clearCustomBtn",
@@ -307,6 +307,7 @@ ${known}
       "viewer", "viewerBackdrop", "viewerClose", "viewerNo", "viewerTitle",
       "viewerTitleEn", "viewerSeries", "viewerRarity", "viewerStory",
       "viewerCollection", "viewerId", "viewerDate", "viewerConfidence",
+      "viewerWatermark", "viewerWatermarkCode",
       "viewerNote", "viewerSample", "viewerFav", "viewerFavLabel", "viewerIndex",
       "viewerTotal", "viewerProgressBar", "viewerPlateNo", "viewerBackNo",
       "viewerImage", "viewerSkeleton", "viewerStage", "viewerReflection", "artCard",
@@ -351,6 +352,14 @@ ${known}
       const button = event.target.closest("[data-series-filter]");
       if (!button) return;
       state.filters.series = button.dataset.seriesFilter;
+      updateFilterUI();
+      renderCollection();
+    });
+
+    el.seriesFilters.addEventListener("change", (event) => {
+      const select = event.target.closest("[data-series-select]");
+      if (!select) return;
+      state.filters.series = select.value;
       updateFilterUI();
       renderCollection();
     });
@@ -563,7 +572,16 @@ ${known}
   function getHomeItems() {
     const selected = [];
     const seen = new Set();
-    const preferred = ["skullpanda", "hirono", "labubu", "dimoo", "molly", "crybaby", "sweetbean", "pucky"];
+    const preferred = [
+      "skullpanda-pony",
+      "labubu-macaron",
+      "dimoo-disney",
+      "monsters-barbershop",
+      "crybaby-wish",
+      "hacipupu-lostpaws",
+      "twinkle-heartbeat",
+      "skullpanda-garden",
+    ];
     const orderedKeys = [
       ...preferred.filter((key) => SERIES_ORDER.includes(key)),
       ...SERIES_ORDER.filter((key) => !preferred.includes(key)),
@@ -626,7 +644,7 @@ ${known}
       el.homeFeatureImage.alt = `${item.series} ${item.title}`;
       if (el.homeFeatureIndex) el.homeFeatureIndex.textContent = `${index} / ${total}`;
       if (el.homeFeatureGhost) el.homeFeatureGhost.textContent = item.no || "001";
-      if (el.homeFeatureNo) el.homeFeatureNo.textContent = `NO. ${item.no || "001"}`;
+      if (el.homeFeatureNo) el.homeFeatureNo.textContent = `NO. ${item.code || item.no || "JJ-001"}`;
       if (el.homeFeatureTitle) el.homeFeatureTitle.textContent = item.title;
       if (el.homeFeatureSeries) el.homeFeatureSeries.textContent = item.series;
       if (el.homeFeatureCollection) el.homeFeatureCollection.textContent = item.collection || meta?.collection || "私人收藏";
@@ -754,15 +772,15 @@ ${known}
       const monogram = meta.name.replace(/[^A-Z0-9]/gi, "").slice(0, 2) || "SA";
       const status = count ? `已收录 ${count} 件` : "待收录";
       return `
-        <button class="catalog-card${count ? "" : " catalog-card--pending"}" type="button" data-catalog-series="${key}" aria-label="翻阅 ${escapeHTML(meta.name)} · ${escapeHTML(meta.cn)} 图鉴">
+        <button class="catalog-card${count ? "" : " catalog-card--pending"}" type="button" data-catalog-series="${key}" aria-label="翻阅 ${escapeHTML(meta.collection || meta.cn)} · ${escapeHTML(meta.name)} 图鉴">
           <span class="catalog-card__cover"${count ? "" : ` data-monogram="${escapeHTML(monogram)}"`}>
             ${cover ? `<img src="${escapeHTML(cover)}" alt="" loading="lazy" decoding="async">` : ""}
             <span class="catalog-card__index">${String(index + 1).padStart(2, "0")}</span>
-            <span class="catalog-card__count"><b>${count || "—"}</b> ${count ? "PIECES" : "PENDING"}</span>
+            <span class="catalog-card__count"><b>${count || "—"}</b> ${count === 1 ? "PIECE" : count ? "PIECES" : "PENDING"}</span>
           </span>
           <span class="catalog-card__body">
-            <h3>${escapeHTML(meta.name)}</h3>
-            <p>${escapeHTML(meta.cn)} · ${escapeHTML(meta.collection || "自由归档")}</p>
+            <h3>${escapeHTML(meta.collection || meta.cn || meta.name)}</h3>
+            <p>${escapeHTML(meta.name)} · ${escapeHTML(meta.collectionEn || "SERIES")}</p>
             <span class="catalog-card__status"><span>${status}</span><em>OPEN ↗</em></span>
           </span>
         </button>`;
@@ -786,11 +804,11 @@ ${known}
     const index = entries.indexOf(entry) + 1;
     const total = entries.length;
     if (el.catalogDialogIndex) el.catalogDialogIndex.textContent = `${String(index).padStart(2, "0")} / ${String(total).padStart(2, "0")}`;
-    if (el.catalogDialogTitle) el.catalogDialogTitle.textContent = meta.name;
-    if (el.catalogDialogCn) el.catalogDialogCn.textContent = meta.cn || "";
+    if (el.catalogDialogTitle) el.catalogDialogTitle.textContent = meta.collection || meta.cn || meta.name;
+    if (el.catalogDialogCn) el.catalogDialogCn.textContent = `${meta.name}${meta.ipCn ? ` · ${meta.ipCn}` : ""}`;
     if (el.catalogDialogIntro) el.catalogDialogIntro.textContent = meta.intro || "为还没有归处的藏品保留的一席。";
     if (el.catalogDialogCount) el.catalogDialogCount.textContent = String(items.length);
-    if (el.catalogDialogCollection) el.catalogDialogCollection.textContent = meta.collection || "自由归档";
+    if (el.catalogDialogCollection) el.catalogDialogCollection.textContent = meta.name || "自由归档";
     if (el.catalogDialogEn) el.catalogDialogEn.textContent = meta.collectionEn || "FREE ARCHIVE";
     if (el.catalogDialogEmpty) el.catalogDialogEmpty.hidden = items.length > 0;
     if (el.catalogDialogGrid) {
@@ -798,7 +816,7 @@ ${known}
         <button class="catalog-piece" type="button" data-catalog-open="${item.id}" aria-label="欣赏 ${escapeHTML(item.series)} ${escapeHTML(item.title)}">
           <span class="catalog-piece__image"><img src="${escapeHTML(gridImageFor(item))}" alt="" loading="lazy" decoding="async"></span>
           <span class="catalog-piece__body">
-            <span class="catalog-piece__no">NO. ${escapeHTML(item.no)}</span>
+            <span class="catalog-piece__no">NO. ${escapeHTML(item.code || item.no)}</span>
             <span class="catalog-piece__title">${escapeHTML(item.title)}</span>
           </span>
         </button>`).join("");
@@ -1156,7 +1174,7 @@ ${known}
     if (item.sample && /^\d{3}$/.test(item.no)) {
       return `assets/photos/card/${item.no}.webp`;
     }
-    return item.thumb || item.src || "";
+    return item.card || item.thumb || item.src || "";
   }
 
   async function renderAct(index, options = {}) {
@@ -1573,12 +1591,15 @@ ${known}
     const contained = SERIES_ORDER
       .map((key) => SERIES[key])
       .filter((meta) => meta.key !== OTHER_SERIES_KEY)
-      .filter((meta) => {
-        const flat = flattenSeriesName(meta.name);
-        return flat.length >= 4 && raw.includes(flat);
+      .map((meta) => {
+        const terms = [meta.collection, meta.cn, meta.name, ...(meta.keywords || [])]
+          .map(flattenSeriesName)
+          .filter((term) => term.length >= 2 && raw.includes(term));
+        return { meta, score: Math.max(0, ...terms.map((term) => term.length)) };
       })
-      .sort((a, b) => b.name.length - a.name.length);
-    return contained[0] || null;
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score);
+    return contained[0]?.meta || null;
   }
 
   function shadeHex(hex, factor) {
@@ -1759,7 +1780,6 @@ ${known}
 
   function updateCounts() {
     const total = state.items.length;
-    const rare = state.items.filter((item) => item.rarity === "隐藏款" || item.rarity === "限定款").length;
     const counts = seriesCounts();
     const ownedSeries = SERIES_ORDER.filter((key) => (counts[key] || 0) > 0).length;
     const setText = (node, value) => { if (node) node.textContent = value; };
@@ -1770,7 +1790,7 @@ ${known}
     setText(el.homeSeriesCount, SERIES_ORDER.length);
     setText(el.collectionCount, total);
     setText(el.collectionSeries, SERIES_ORDER.length);
-    setText(el.collectionRare, rare);
+    setText(el.collectionRare, total ? 1 : 0);
     setText(el.resultCount, state.filteredItems.length);
     setText(el.favCount, state.favourites.size);
     setText(el.catalogSeriesCount, SERIES_ORDER.length);
@@ -1784,35 +1804,40 @@ ${known}
 
   function renderFilters() {
     const counts = seriesCounts();
-    const seriesButtons = [
-      `<button class="filter-option" type="button" data-series-filter="all" aria-pressed="false">
-        <span class="filter-option__dot" style="--accent:var(--gold)" aria-hidden="true"></span>
-        <span class="filter-option__label">全部系列</span>
-        <span class="filter-option__cn">全</span>
-        <span class="filter-option__count">${state.items.length}</span>
-      </button>`,
-    ];
+    const groups = new Map();
     for (const key of SERIES_ORDER) {
       const meta = SERIES[key];
-      const count = counts[key] || 0;
-      seriesButtons.push(`
-        <button class="filter-option${count ? "" : " filter-option--empty"}${meta.custom ? " filter-option--custom" : ""}" type="button" data-series-filter="${key}" style="--accent:${meta.accent}" aria-pressed="false" title="${count ? `${escapeHTML(meta.name)} · ${escapeHTML(meta.cn)}` : "还没有藏品；导入后会自动归入这个分类"}">
-          <span class="filter-option__dot" aria-hidden="true"></span>
-          <span class="filter-option__label">${escapeHTML(meta.name)}</span>
-          <span class="filter-option__cn">${escapeHTML(meta.cn)}</span>
-          <span class="filter-option__count">${count || "待"}</span>
-        </button>`);
+      if (!groups.has(meta.name)) groups.set(meta.name, []);
+      groups.get(meta.name).push({ key, meta, count: counts[key] || 0 });
     }
-    el.seriesFilters.innerHTML = seriesButtons.join("");
+    const options = [
+      `<option value="all">全部系列 · ${state.items.length} 件</option>`,
+    ];
+    for (const [ip, entries] of groups) {
+      options.push(`<optgroup label="${escapeHTML(ip)}">`);
+      for (const { key, meta, count } of entries) {
+        options.push(`<option value="${escapeHTML(key)}">${escapeHTML(meta.collection || meta.cn)} · ${count} 件</option>`);
+      }
+      options.push("</optgroup>");
+    }
+    el.seriesFilters.innerHTML = `
+      <label class="series-select">
+        <span class="series-select__eyebrow">按系列浏览 <em>SERIES</em></span>
+        <span class="series-select__field">
+          <select data-series-select aria-label="按系列筛选藏品">${options.join("")}</select>
+          <svg viewBox="0 0 12 8" aria-hidden="true"><path d="m1 1.5 5 5 5-5"/></svg>
+        </span>
+      </label>
+      <p class="series-select__hint">选择系列后，藏品馆会同步收拢；图鉴里可以看系列封面与全部条目。</p>`;
 
-    const regular = state.items.filter((item) => item.rarity === "常规款").length;
-    const limited = state.items.filter((item) => item.rarity === "限定款").length;
-    const hidden = state.items.filter((item) => item.rarity === "隐藏款").length;
+    const rarityMap = new Map();
+    for (const item of state.items) {
+      const value = item.rarity || "私人藏品";
+      rarityMap.set(value, (rarityMap.get(value) || 0) + 1);
+    }
     const rarityData = [
       ["all", "全部版本", `${state.items.length}`],
-      ["常规款", "常规款", `${regular}`],
-      ["限定款", "限定款", `${limited}`],
-      ["隐藏款", "隐藏款", `${hidden}`],
+      ...Array.from(rarityMap.entries()).map(([value, count]) => [value, value, `${count}`]),
     ];
     el.rarityFilters.innerHTML = rarityData.map(([value, label, count]) => `
       <button class="filter-option" type="button" data-rarity-filter="${value}" aria-pressed="false">
@@ -1825,6 +1850,8 @@ ${known}
   }
 
   function updateFilterUI() {
+    const seriesSelect = $("[data-series-select]", el.seriesFilters);
+    if (seriesSelect) seriesSelect.value = state.filters.series;
     $$("[data-series-filter]", el.seriesFilters).forEach((button) => {
       const active = button.dataset.seriesFilter === state.filters.series;
       button.classList.toggle("is-active", active);
@@ -1849,8 +1876,8 @@ ${known}
     const counts = seriesCounts();
     el.atelierSeriesList.innerHTML = SERIES_ORDER.map((key) => {
       const meta = SERIES[key];
-      return `<span class="mini-series__item${meta.custom ? " is-custom" : ""}" style="--accent:${meta.accent}" title="${escapeHTML(meta.cn)}">
-        <i aria-hidden="true"></i><span>${escapeHTML(meta.name)}</span><b>${counts[key] || 0}</b>
+      return `<span class="mini-series__item${meta.custom ? " is-custom" : ""}" style="--accent:${meta.accent}" title="${escapeHTML(`${meta.name} · ${meta.cn}`)}">
+        <i aria-hidden="true"></i><span>${escapeHTML(meta.collection || meta.cn || meta.name)}</span><b>${counts[key] || 0}</b>
       </span>`;
     }).join("");
   }
@@ -1922,7 +1949,7 @@ ${known}
               <div class="plate__image">
                 <img src="${escapeHTML(gridImageFor(item))}" alt="${escapeHTML(item.series)} ${escapeHTML(item.title)}，${item.sample ? "示例藏品照片" : "私人藏品照片"}" loading="lazy" decoding="async" width="500" height="625">
                 ${item.sample ? '<span class="plate__sample">SAMPLE · 样张</span>' : ""}
-                <span class="plate__index">${escapeHTML(item.no)}</span>
+                <span class="plate__index">${escapeHTML(item.code || item.no)}</span>
                 <span class="plate__hover"><span>赏</span><em>VIEW PLATE</em></span>
               </div>
             </div>
@@ -1952,7 +1979,7 @@ ${known}
     const chips = [];
     if (state.filters.series !== "all") {
       const meta = findSeries(state.filters.series);
-      chips.push({ type: "series", label: `系列 · ${meta ? meta.name : state.filters.series}` });
+      chips.push({ type: "series", label: `系列 · ${meta ? (meta.collection || meta.cn || meta.name) : state.filters.series}` });
     }
     if (state.filters.rarity !== "all") {
       chips.push({ type: "rarity", label: `版本 · ${state.filters.rarity}` });
@@ -2106,9 +2133,9 @@ ${known}
     el.viewerIndex.textContent = String(viewer.index + 1).padStart(3, "0");
     el.viewerTotal.textContent = String(list.length).padStart(3, "0");
     el.viewerProgressBar.style.width = `${((viewer.index + 1) / list.length) * 100}%`;
-    el.viewerNo.textContent = `PLATE ${item.no}`;
-    el.viewerPlateNo.textContent = item.no;
-    el.viewerBackNo.textContent = `NO. ${item.no}`;
+    el.viewerNo.textContent = `PLATE ${item.code || item.no}`;
+    el.viewerPlateNo.textContent = item.code || item.no;
+    el.viewerBackNo.textContent = `NO. ${item.code || item.no}`;
     el.viewerPrev.disabled = list.length < 2;
     el.viewerNext.disabled = list.length < 2;
     el.viewerFav.setAttribute("aria-pressed", state.favourites.has(item.id) ? "true" : "false");
@@ -2138,19 +2165,20 @@ ${known}
   function setViewerText(item) {
     const meta = findSeries(item.seriesKey) || {};
     el.viewerTitle.textContent = item.title;
-    el.viewerTitleEn.textContent = item.titleEn || "";
+    el.viewerTitleEn.textContent = item.titleEn || item.collectionEn || "";
     el.viewerSeries.textContent = `${item.series}${item.sample ? " · SAMPLE" : ""}`;
     el.viewerRarity.textContent = item.rarity;
     el.viewerStory.textContent = item.story || meta.intro || "";
     el.viewerCollection.textContent = `${item.collection || meta.collection || ""}${item.collectionEn ? ` · ${item.collectionEn}` : ""}`;
-    el.viewerId.textContent = item.id;
+    el.viewerId.textContent = item.code || item.id;
+    if (el.viewerWatermarkCode) el.viewerWatermarkCode.textContent = item.code || item.id;
     el.viewerDate.textContent = item.date;
     el.viewerConfidence.textContent = item.manual
       ? "手动归档"
       : item.confidence != null
         ? `${(Number(item.confidence) * 100).toFixed(1)}%`
         : "—";
-    el.viewerSample.textContent = item.sample ? "SAMPLE PLATE · 示例占位样张" : "PRIVATE COLLECTION · 私人藏品";
+    el.viewerSample.textContent = "PRIVATE COLLECTION · 晶晶私人藏品";
     el.viewerNote.textContent = item.sample
       ? "这是为了让展厅先亮起来而制作的样张；可在识藏室换成你的真实照片。"
       : "照片只保存在这台设备的浏览器里，不会上传到任何服务器。";
@@ -2927,33 +2955,6 @@ ${known}
     window.addEventListener("dragover", (event) => event.preventDefault());
     window.addEventListener("drop", (event) => event.preventDefault());
 
-    el.demoIdentifyBtn.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      if (state.uploadBusy) return;
-      el.demoIdentifyBtn.disabled = true;
-      try {
-        const picks = [state.demo[2], state.demo[84], state.demo[164]].filter(Boolean);
-        const files = [];
-        for (const item of picks) {
-          const response = await fetch(heroImageFor(item));
-          if (!response.ok) continue;
-          const blob = await response.blob();
-          files.push(new File([blob], `${item.seriesKey}-sample.webp`, { type: blob.type || "image/webp" }));
-        }
-        if (files.length) {
-          await handleFiles(files, { demo: true });
-          showToast("已放入示例样张，可直接体验识别与入藏。");
-        } else {
-          showToast("示例样张暂时读不到，请直接选择你的照片。");
-        }
-      } catch (error) {
-        console.warn(error);
-        showToast("示例样张暂时读不到，请直接选择你的照片。");
-      } finally {
-        el.demoIdentifyBtn.disabled = false;
-      }
-    });
-
     el.clearResults.addEventListener("click", cancelPendingUpload);
     el.resultGrid.addEventListener("change", (event) => {
       const select = event.target.closest("[data-result-series]");
@@ -3610,7 +3611,7 @@ ${known}
 
   async function clearCustomMirror() {
     if (!state.customItems.length) return;
-    const confirmed = window.confirm("清空你导入的所有本地照片与识藏记录？这不会影响内置示例样张。");
+    const confirmed = window.confirm("清空你导入的所有本地照片与识藏记录？这不会影响内置馆藏。");
     if (!confirmed) return;
     try {
       await clearAllRecords();

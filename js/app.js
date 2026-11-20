@@ -276,7 +276,7 @@ ${known}
     const ids = [
       "preloader", "loadBar", "loadPercent", "loadTotal", "loadStatus",
       "topbar", "navCount", "treeView", "treeStage", "photoOrbit", "treeRing",
-      "treeSculpture", "treeShield", "treeCanvas", "treeFallback", "treeParticles", "treePhotoList", "starDust",
+      "treeSculpture", "treeShield", "treeCanvas", "treeFallback", "treeParticles", "treePhotoList", "treeZoom", "treeZoomValue", "starDust",
       "heroCount", "heroSeriesCount", "photoTip", "photoTipNo", "photoTipName", "photoTipSeries",
       "actRailDots", "actRailCurrent", "actRailTotal", "actRailTitle",
       "actCounter", "actTitle", "mobileActCurrent", "mobileActTotal", "actAnnouncement",
@@ -336,6 +336,11 @@ ${known}
       const orbitAction = event.target.closest("[data-orbit-action]");
       if (orbitAction) {
         if (orbitAction.dataset.orbitAction === "toggle") toggleOrbit();
+        return;
+      }
+      const zoomAction = event.target.closest("[data-tree-zoom]");
+      if (zoomAction) {
+        state.treeScene?.zoomBy(zoomAction.dataset.treeZoom === "in" ? 0.06 : -0.06);
         return;
       }
       const actAction = event.target.closest("[data-act-action]");
@@ -594,19 +599,25 @@ ${known}
             if (item) showPhotoTipForItem(item, x, y);
             else hidePhotoTip();
           },
+          onZoom(value) {
+            updateTreeZoomLabel(value);
+          },
         });
         state.treeScene.setPaused(state.orbit.paused);
         state.treeScene.setActive(state.route === "tree");
+        updateTreeZoomLabel(state.treeScene.zoom);
       } catch (error) {
         console.warn("3D tree unavailable:", error);
         document.body.classList.add("tree-3d-failed");
         if (el.treeFallback) el.treeFallback.hidden = false;
         if (el.treeCanvas) el.treeCanvas.hidden = true;
+        if (el.treeZoom) el.treeZoom.hidden = true;
       }
     } else if (el.treeFallback) {
       document.body.classList.add("tree-3d-failed");
       el.treeFallback.hidden = false;
       if (el.treeCanvas) el.treeCanvas.hidden = true;
+      if (el.treeZoom) el.treeZoom.hidden = true;
     }
     applyActImages();
     updateOrbitUI();
@@ -711,6 +722,10 @@ ${known}
     state.treeScene?.setItems(sceneItems);
     updateTreePhotoList();
     updateActChrome();
+  }
+
+  function updateTreeZoomLabel(value) {
+    if (el.treeZoomValue) el.treeZoomValue.textContent = `${Math.round(value * 100)}%`;
   }
 
   function updateTreePhotoList() {
@@ -842,7 +857,7 @@ ${known}
   function updateOrbitUI() {
     const paused = state.orbit.paused;
     $$("[data-orbit-label]").forEach((label) => {
-      label.textContent = paused ? "继续环游" : "暂停环游";
+      label.textContent = paused ? "继续照片" : "暂停照片";
     });
     $$("[data-orbit-icon]").forEach((icon) => {
       icon.textContent = paused ? "▶" : "Ⅱ";

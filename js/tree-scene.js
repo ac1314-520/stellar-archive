@@ -83,19 +83,21 @@
       this.canvas = canvas;
       this.onPhotoClick = options.onPhotoClick || null;
       this.onPhotoHover = options.onPhotoHover || null;
+      this.onZoom = options.onZoom || null;
       this.random = seeded(20261224);
       this.mobile = IS_MOBILE;
       this.paused = false;
       this.active = false;
-      this.dragging = false;
-      this.pointerId = null;
-      this.startX = 0;
-      this.startY = 0;
-      this.lastPointerX = 0;
-      this.moved = false;
-      this.autoResumeAt = 0;
-      this.rotation = -0.34;
-      this.targetRotation = -0.34;
+      this.pointers = new Map();
+      this.tap = null;
+      this.pinching = false;
+      this.pinchStart = null;
+      this.zoom = 1;
+      this.minZoom = 0.78;
+      this.maxZoom = 1.12;
+      this.zoomOriginY = 3.55;
+      this.sOffset = 0;
+      this.photoSpeed = 0.012;
       this.lastTime = performance.now();
       this.raf = 0;
       this.items = [];
@@ -109,8 +111,10 @@
 
       this.scene = new THREE.Scene();
       this.camera = new THREE.PerspectiveCamera(33, 1, 0.1, 60);
-      this.camera.position.set(0, 4.15, 16.1);
-      this.camera.lookAt(new THREE.Vector3(0, 3.45, 0));
+      // A little closer than the ring version: the tree is the protagonist and
+      // the photograph ribbon needs room to hug its branches.
+      this.camera.position.set(0, 4.2, 13.55);
+      this.camera.lookAt(new THREE.Vector3(0, 3.5, 0));
 
       this.renderer = new THREE.WebGLRenderer({
         canvas,
@@ -126,7 +130,8 @@
       this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
       this.root = new THREE.Group();
-      this.root.rotation.y = this.rotation;
+      this.root.rotation.y = 0;
+      this.root.scale.setScalar(this.zoom);
       this.scene.add(this.root);
 
       this.cardGroup = new THREE.Group();
@@ -144,7 +149,7 @@
 
       this.buildLights();
       this.buildTree();
-      this.buildPhotoRingSettings();
+      this.buildPhotoRibbonSettings();
       this.buildSnow();
       this.bindPointer();
       this.resize();
@@ -716,12 +721,10 @@
       this.scene.add(this.snowPoints);
     }
 
-    buildPhotoRingSettings() {
-      this.cardW = 1.06;
-      this.cardH = 1.34;
-      this.cardGeometry = new THREE.BoxGeometry(this.cardW, this.cardH, 0.035);
-      this.cardEdgeMaterial = new THREE.MeshBasicMaterial({ color: 0xd7b27b, toneMapped: false });
-      this.cardBackMaterial = new THREE.MeshBasicMaterial({ color: 0x1a1112, toneMapped: false });
+    buildPhotoRibbonSettings() {
+      this.cardW = 0.82;
+      this.cardH = 1.025;
+      this.cardGeometry = new THREE.PlaneGeometry(this.cardW, this.cardH);
       this.cardMeshes = [];
     }
 
@@ -821,30 +824,25 @@
       }
 
       const group = new THREE.Group();
-      group.name = "winter-photo-ring";
+      group.name = "winter-photo-ribbon";
       const nextCards = [];
       const count = entries.length;
-      const perRing = Math.ceil(count / 2);
       entries.forEach((entry, index) => {
-        const ring = index % 2;
-        const ringIndex = Math.floor(index / 2);
-        const ringCount = ring === 0 ? perRing : count - perRing;
-        if (!ringCount) return;
-        const angle = (ringIndex / ringCount) * TAU + (ring === 0 ? 0.15 : 0.72) + ring * 0.1;
-        const radius = ring === 0 ? 2.58 : 2.72;
-        const y = ring === 0 ? 2.02 : 4.18;
-        const front = new THREE.MeshBasicMaterial({ map: entry.texture, toneMapped: false });
-        const mesh = new THREE.Mesh(this.cardGeometry, [
-          this.cardEdgeMaterial,
-          this.cardEdgeMaterial,
-          this.cardEdgeMaterial,
-          this.cardEdgeMaterial,
-          front,
-          this.cardBackMaterial,
-        ]);
-        mesh.position.set(Math.sin(angle) * radius, y, Math.cos(angle) * radius);
-        mesh.rotation.y = -this.rotation;
-        mesh.userData = { item: entry.item, frontMaterial: front, texture: entry.texture };
+        const material = new THREE.MeshBasicMaterial({
+          map: entry.texture,
+          transparent: true,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+          depthWrite: false,
+          opacity: 0,
+        });
+        const mesh = new THREE.Mesh(this.cardGeometry, material);
+        mesh.userData = {
+          item: entry.item,
+          texture: entry.texture,
+          baseT: count ? index / count : 0,
+          opacity: 0,
+        };
         group.add(mesh);
         nextCards.push(mesh);
       });
@@ -854,65 +852,153 @@
         this.root.remove(previousGroup);
         previousGroup.traverse((child) => {
           if (!child.isMesh) return;
-          child.userData.frontMaterial?.map?.dispose?.();
-          child.userData.frontMaterial?.dispose?.();
+          child.userData.texture?.dispose?.();
+          child.material?.dispose?.();
         });
       }
       this.cardGroup = group;
       this.cardMeshes = nextCards;
       this.items = entries.map((entry) => entry.item);
       this.canvas.classList.add("is-ready");
+      this.updatePhotoRibbon(0, 0);
       this.scene.updateMatrixWorld(true);
       this.renderFrame(performance.now(), true);
+    }
+
+    treeRadiusAt(y) {
+      const treeBottom = 0.38;
+      const total = 5.93;
+      const t = Math.max(0, Math.min(1, (y - treeBottom) / total));
+      return 2.38 * Math.pow(1 - t, 1.02) + 0.14;
+    }
+
+    updatePhotoRibbon(now, dt) {
+      if (!this.cardMeshes.length) return;
+      if (!this.paused) {
+        // The photographs travel along the S for about 83 seconds, then
+        // re-enter at the crown. Their size never changes.
+        this.sOffset = (this.sOffset + dt * this.photoSpeed) % 1;
+      }
+      const top = 6.08;
+      const bottom = 0.72;
+      const span = top - bottom;
+      this.cardMeshes.forEach((card, index) => {
+        const t = (card.userData.baseT + this.sOffset) % 1;
+        const y = top - t * span;
+        const radius = this.treeRadiusAt(y) + 0.22;
+        // A shallow S that stays on the visible face of the cone. The
+        // photographs swing left and right while following the branch
+        // radius; all of them remain readable, none disappears backstage.
+        const angle = Math.sin(t * Math.PI * 2.35 + 0.2) * 1.18;
+        const x = Math.sin(angle) * radius;
+        const z = Math.cos(angle) * radius;
+        card.position.set(x, y, z);
+        card.rotation.set(0, 0, 0);
+        const edge = Math.min(1, Math.min(t, 1 - t) / 0.055);
+        const opacity = edge * (0.94 + 0.06 * (1 - t));
+        card.material.opacity = opacity;
+        card.visible = opacity > 0.015;
+        card.userData.opacity = opacity;
+        card.renderOrder = 20 + index;
+      });
+    }
+
+    setZoom(value, notify = true) {
+      const next = Math.max(this.minZoom, Math.min(this.maxZoom, value));
+      if (Math.abs(next - this.zoom) < 0.0005) return;
+      this.zoom = next;
+      this.root.scale.setScalar(next);
+      // Keep the middle of the tree in the same place while zooming, so the
+      // star and the gifts are not immediately pushed out of the canvas.
+      this.root.position.y = -this.zoomOriginY * (next - 1);
+      if (notify) this.onZoom?.(next);
+      this.renderFrame(performance.now(), true);
+    }
+
+    zoomBy(delta) {
+      this.setZoom(this.zoom + delta);
     }
 
     /* ───────────────────────── interaction / loop ───────────────────────── */
 
     bindPointer() {
       const canvas = this.canvas;
+
+      const distanceBetweenPointers = () => {
+        const points = Array.from(this.pointers.values());
+        if (points.length < 2) return 0;
+        return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+      };
+
       canvas.addEventListener("pointerdown", (event) => {
         if (event.pointerType === "mouse" && event.button !== 0) return;
-        this.dragging = true;
-        this.moved = false;
-        this.pointerId = event.pointerId;
-        this.startX = event.clientX;
-        this.startY = event.clientY;
-        this.lastPointerX = event.clientX;
-        this.autoResumeAt = performance.now() + 2600;
+        event.preventDefault();
+        this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         canvas.setPointerCapture?.(event.pointerId);
-        canvas.classList.add("is-dragging");
+
+        if (this.pointers.size === 1) {
+          this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+          this.pinching = false;
+          this.pinchStart = null;
+        } else if (this.pointers.size === 2) {
+          this.pinching = true;
+          this.tap = null;
+          this.pinchStart = { distance: Math.max(1, distanceBetweenPointers()), zoom: this.zoom };
+        }
       });
 
       canvas.addEventListener("pointermove", (event) => {
-        if (!this.dragging || event.pointerId !== this.pointerId) {
+        if (!this.pointers.has(event.pointerId)) {
           if (event.pointerType !== "touch") this.handleHover(event);
           return;
         }
-        const dx = event.clientX - this.lastPointerX;
-        this.lastPointerX = event.clientX;
-        if (Math.abs(event.clientX - this.startX) + Math.abs(event.clientY - this.startY) > 5) this.moved = true;
-        if (!this.moved) return;
-        event.preventDefault();
-        this.targetRotation += dx * 0.0062;
-        this.autoResumeAt = performance.now() + 2600;
-        canvas.classList.add("is-dragging");
+        this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+        if (this.pointers.size >= 2) {
+          event.preventDefault();
+          this.tap = null;
+          const distance = distanceBetweenPointers();
+          if (this.pinchStart && distance > 0) {
+            this.setZoom(this.pinchStart.zoom * (distance / this.pinchStart.distance));
+          }
+          return;
+        }
+
+        if (this.tap && this.tap.id === event.pointerId) {
+          const moved = Math.hypot(event.clientX - this.tap.x, event.clientY - this.tap.y);
+          if (moved > 6) this.tap.moved = true;
+        }
+        if (event.pointerType !== "touch") this.handleHover(event);
       });
 
       const end = (event) => {
-        if (!this.dragging) return;
-        const wasMoved = this.moved;
-        this.dragging = false;
-        this.pointerId = null;
-        canvas.classList.remove("is-dragging");
+        const wasTap = Boolean(
+          this.tap
+          && this.tap.id === event.pointerId
+          && !this.tap.moved
+          && this.pointers.size === 1
+          && !this.pinching,
+        );
+        this.pointers.delete(event.pointerId);
         canvas.releasePointerCapture?.(event.pointerId);
-        if (!wasMoved) this.handleClick(event);
-        this.autoResumeAt = performance.now() + 2600;
+        if (this.pointers.size < 2) this.pinchStart = null;
+        if (this.pointers.size === 0) {
+          this.pinching = false;
+          this.tap = null;
+        }
+        if (wasTap) this.handleClick(event);
       };
       canvas.addEventListener("pointerup", end);
       canvas.addEventListener("pointercancel", end);
       canvas.addEventListener("pointerleave", (event) => {
-        if (this.dragging && event.buttons === 0) end(event);
+        if (this.pointers.size === 0 && event.buttons === 0) this.handleHover(event);
       });
+
+      canvas.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const factor = Math.exp(-event.deltaY * 0.00135);
+        this.setZoom(this.zoom * factor);
+      }, { passive: false });
     }
 
     raycast(event) {
@@ -924,9 +1010,10 @@
       this.raycaster.setFromCamera(this.pointer, this.camera);
       const position = new THREE.Vector3();
       const clickable = this.cardMeshes.filter((mesh) => {
+        if (mesh.material.opacity <= 0.16) return false;
         mesh.getWorldPosition(position);
-        // Do not open a photograph that is currently hidden behind the tree.
-        return position.z > 0.12;
+        // Only the visible, front-facing half of the ribbon is clickable.
+        return position.z > 0.04;
       });
       const hits = this.raycaster.intersectObjects(clickable, false);
       return hits[0]?.object || null;
@@ -949,7 +1036,7 @@
       this.lastHoverAt = now;
       const mesh = this.raycast(event);
       const item = mesh?.userData?.item || null;
-      this.canvas.style.cursor = this.dragging ? "grabbing" : item ? "pointer" : "grab";
+      this.canvas.style.cursor = item ? "pointer" : "zoom-in";
       if (item !== this.hoverItem) {
         this.hoverItem = item;
         this.onPhotoHover?.(item, event.clientX, event.clientY);
@@ -991,19 +1078,9 @@
     renderFrame(now, force = false) {
       const dt = Math.min(0.05, Math.max(0, (now - this.lastTime) / 1000));
       this.lastTime = now;
-      if (!this.paused && !this.dragging && now > this.autoResumeAt) {
-        // Slow turntable, close to the birthday-cake scene's lazy spin.
-        this.targetRotation += dt * 0.135;
-      }
-      this.rotation += (this.targetRotation - this.rotation) * Math.min(1, dt * 5.2);
-      this.root.rotation.y = this.rotation;
-      // A barely-there cake-stand sway; the tree and photographs share it.
-      this.root.rotation.z = Math.sin(now * 0.00032) * 0.004;
-      this.cardMeshes.forEach((mesh) => {
-        // Photographs travel with the tree, but stay readable while they
-        // pass in front of it. Their size is fixed.
-        mesh.rotation.y = -this.rotation;
-      });
+      // The tree stays still; only the photographs drift along the S.
+      this.root.rotation.set(0, 0, 0);
+      this.updatePhotoRibbon(now, dt);
       this.root.updateMatrixWorld(true);
 
       if (this.lightUniforms) this.lightUniforms.uTime.value = now * 0.001;

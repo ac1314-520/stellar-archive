@@ -5402,6 +5402,22 @@ body.viewer-open .view {
   cursor: grabbing;
 }
 
+.tree-view.is-spread .tree-sculpture {
+  position: fixed;
+  inset: 0;
+  z-index: 7;
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+  transform: none;
+}
+
+.tree-view.is-spread .tree-sculpture .tree-canvas {
+  width: 100vw;
+  height: 100vh;
+  aspect-ratio: auto;
+}
+
 .tree-fallback-image {
   position: absolute;
   inset: 0;

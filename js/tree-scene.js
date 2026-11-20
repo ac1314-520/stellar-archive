@@ -11,6 +11,11 @@
   const TAU = Math.PI * 2;
   const IS_MOBILE = window.matchMedia("(max-width: 760px)").matches;
 
+  function smoothstep(edge0, edge1, value) {
+    const t = Math.min(1, Math.max(0, (value - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+
   function seeded(seed) {
     let state = seed >>> 0;
     return function random() {
@@ -94,8 +99,16 @@
       this.pinchStart = null;
       this.zoom = 1;
       this.minZoom = 0.78;
-      this.maxZoom = 1.12;
+      this.maxZoom = 1.42;
       this.zoomOriginY = 3.55;
+      this.spread = 0;
+      this.spreadTarget = 0;
+      this.treeRotation = 0;
+      this.treeSpeed = 0.105;
+      this.particleMaterials = [];
+      this.scatterObjects = [];
+      this.aura = null;
+      this.starSprite = null;
       this.sOffset = 0;
       this.photoSpeed = 0.012;
       this.lastTime = performance.now();
@@ -133,6 +146,12 @@
       this.root.rotation.y = 0;
       this.root.scale.setScalar(this.zoom);
       this.scene.add(this.root);
+
+      // The tree body (particles, apples, gifts, star) turns slowly; the
+      // photographs stay in a readable S in front of it.
+      this.treeRoot = new THREE.Group();
+      this.treeRoot.name = "the-particle-tree";
+      this.root.add(this.treeRoot);
 
       this.cardGroup = new THREE.Group();
       this.cardGroup.name = "the-photographs";
@@ -245,22 +264,422 @@
 
     buildTree() {
       this.buildGroundGlow();
+      this.buildTreeAura();
+      this.buildParticleTree();
+      this.buildApples();
+      this.buildGiftObjects();
+      this.buildParticleStar();
+    }
 
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.15, 0.25, 6.9, 16),
-        new THREE.MeshStandardMaterial({ color: 0x2a1712, roughness: 0.92 }),
+    buildTreeAura() {
+      const texture = canvasTexture(256, (ctx, size) => {
+        const gradient = ctx.createRadialGradient(size / 2, size * 0.58, 2, size / 2, size * 0.58, size / 2);
+        gradient.addColorStop(0, "rgba(109,181,127,.25)");
+        gradient.addColorStop(0.45, "rgba(54,118,82,.13)");
+        gradient.addColorStop(1, "rgba(10,30,20,0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+      });
+      const aura = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.65,
+      }));
+      aura.scale.set(7.4, 8.4, 1);
+      aura.position.y = 3.4;
+      this.root.add(aura);
+      this.aura = aura;
+    }
+
+    makeParticleMaterial(alpha, sizeFactor = 1) {
+      const uniforms = {
+        uTime: { value: 0 },
+        uSpread: { value: 0 },
+        uSpreadX: { value: 1 },
+        uMap: { value: this.glowTexture },
+      };
+      const material = new THREE.ShaderMaterial({
+        uniforms,
+        transparent: true,
+        depthWrite: false,
+        depthTest: true,
+        blending: THREE.AdditiveBlending,
+        vertexShader: `
+          uniform float uSpread;
+          uniform float uSpreadX;
+          attribute vec3 aColor;
+          attribute vec3 aScatter;
+          attribute float aSize;
+          attribute float aPhase;
+          varying vec3 vColor;
+          varying float vPhase;
+          void main() {
+            vec3 p = position + aScatter * vec3(uSpreadX, 1.0, 1.0) * uSpread;
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_PointSize = aSize * ${sizeFactor.toFixed(3)} * (430.0 / max(1.0, -mv.z));
+            gl_Position = projectionMatrix * mv;
+            vColor = aColor;
+            vPhase = aPhase;
+          }
+        `,
+        fragmentShader: `
+          uniform float uTime;
+          uniform sampler2D uMap;
+          varying vec3 vColor;
+          varying float vPhase;
+          void main() {
+            vec4 tex = texture2D(uMap, gl_PointCoord);
+            float twinkle = 0.74 + 0.26 * sin(uTime * 1.8 + vPhase);
+            gl_FragColor = vec4(vColor, tex.a * twinkle * ${alpha.toFixed(3)});
+          }
+        `,
+      });
+      this.particleMaterials.push(material);
+      return material;
+    }
+
+    makeParticleGeometry(entries) {
+      const count = entries.length;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const sizes = new Float32Array(count);
+      const phases = new Float32Array(count);
+      const scatter = new Float32Array(count * 3);
+      entries.forEach((entry, index) => {
+        positions[index * 3] = entry.x;
+        positions[index * 3 + 1] = entry.y;
+        positions[index * 3 + 2] = entry.z;
+        colors[index * 3] = entry.color.r;
+        colors[index * 3 + 1] = entry.color.g;
+        colors[index * 3 + 2] = entry.color.b;
+        sizes[index] = entry.size;
+        phases[index] = entry.phase;
+        scatter[index * 3] = entry.scatter.x;
+        scatter[index * 3 + 1] = entry.scatter.y;
+        scatter[index * 3 + 2] = entry.scatter.z;
+      });
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+      geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+      geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
+      geometry.setAttribute("aScatter", new THREE.BufferAttribute(scatter, 3));
+      return geometry;
+    }
+
+    scatterTarget(wide = false) {
+      const random = this.random;
+      return new THREE.Vector3(
+        (random() - 0.5) * (wide ? 11 : 8.5),
+        random() * 8.4 - 0.4,
+        (random() - 0.5) * (wide ? 7 : 5.5),
       );
-      trunk.position.y = 3.15;
-      trunk.castShadow = true;
-      this.root.add(trunk);
+    }
 
-      this.buildTiers();
-      this.buildNeedles();
-      this.buildGarland();
-      this.buildOrnaments();
-      this.buildStar();
-      this.buildLightsOnTree();
-      this.buildGifts();
+    buildParticleTree() {
+      const random = this.random;
+      const mobile = this.mobile;
+      const bottom = 0.38;
+      const top = 6.78;
+      const branchCount = mobile ? 380 : 680;
+      const perBranch = mobile ? 25 : 33;
+      const fillCount = mobile ? 5500 : 11000;
+      const entries = [];
+
+      const add = (x, y, z, color, size, scatter) => {
+        entries.push({
+          x, y, z, color, size,
+          phase: random() * TAU,
+          scatter: scatter || this.scatterTarget(),
+        });
+      };
+
+      const green = (t, brightness = 0) => {
+        const color = new THREE.Color();
+        color.setHSL(
+          0.335 + random() * 0.055,
+          0.48 + random() * 0.28,
+          0.16 + brightness + random() * 0.17 - t * 0.015,
+        );
+        return color;
+      };
+
+      for (let branch = 0; branch < branchCount; branch += 1) {
+        const tier = Math.floor(random() * 34);
+        const t = tier / 33;
+        const y = bottom + (1 - t) * 0.15 + (1 - t) * 6.2 + (random() - 0.5) * 0.12;
+        const radius = this.treeRadiusAt(y);
+        const angle = branch * 2.399 + random() * 0.28 + t * 0.4;
+        const length = radius * (0.42 + random() * 0.62);
+        const droop = 0.06 + random() * 0.24;
+        const branchBrightness = random() * 0.12;
+        for (let j = 0; j < perBranch; j += 1) {
+          const u = j / (perBranch - 1);
+          const r = length * Math.pow(u, 0.92);
+          const jitter = (random() - 0.5) * 0.12;
+          const x = Math.cos(angle) * r + Math.cos(angle + 1.5) * jitter;
+          const z = Math.sin(angle) * r + Math.sin(angle + 1.5) * jitter;
+          const yy = y - droop * u * u + (random() - 0.5) * 0.06;
+          const gold = random() < 0.045;
+          const color = gold
+            ? new THREE.Color().setHSL(0.105 + random() * 0.035, 0.65, 0.4 + random() * 0.18)
+            : green(t, branchBrightness + u * 0.06);
+          const size = (gold ? 0.2 : 0.11) + random() * 0.13;
+          add(x, yy, z, color, size);
+        }
+      }
+
+      for (let i = 0; i < fillCount; i += 1) {
+        const t = Math.pow(random(), 0.82);
+        const y = bottom + t * 6.42;
+        const radius = this.treeRadiusAt(y);
+        const angle = random() * TAU;
+        const r = radius * (0.24 + random() * 0.74);
+        const x = Math.cos(angle) * r;
+        const z = Math.sin(angle) * r;
+        const gold = random() < 0.025;
+        const color = gold
+          ? new THREE.Color().setHSL(0.11, 0.6, 0.42)
+          : green(1 - t, random() * 0.05);
+        add(x, y, z, color, 0.075 + random() * 0.13);
+      }
+
+      const foliage = new THREE.Points(
+        this.makeParticleGeometry(entries),
+        this.makeParticleMaterial(0.42),
+      );
+      foliage.frustumCulled = false;
+      this.treeRoot.add(foliage);
+
+      // A golden thread wound through the cone, also made of particles.
+      const spiralEntries = [];
+      const spiralCount = mobile ? 1500 : 2800;
+      for (let i = 0; i < spiralCount; i += 1) {
+        const t = i / spiralCount;
+        const y = 0.55 + t * 5.95;
+        const angle = t * TAU * 6.1 + (i % 2) * Math.PI;
+        const radius = this.treeRadiusAt(y) * (0.95 + random() * 0.06);
+        spiralEntries.push({
+          x: Math.cos(angle) * radius,
+          y: y + (random() - 0.5) * 0.025,
+          z: Math.sin(angle) * radius,
+          color: new THREE.Color().setHSL(0.105 + random() * 0.025, 0.66, 0.45 + random() * 0.18),
+          size: 0.075 + random() * 0.09,
+          phase: random() * TAU,
+          scatter: this.scatterTarget(),
+        });
+      }
+      const spiral = new THREE.Points(
+        this.makeParticleGeometry(spiralEntries),
+        this.makeParticleMaterial(0.82),
+      );
+      spiral.frustumCulled = false;
+      this.treeRoot.add(spiral);
+
+      // Brighter little bulbs on the surface.
+      const lightEntries = [];
+      const lightCount = mobile ? 240 : 420;
+      for (let i = 0; i < lightCount; i += 1) {
+        const t = random();
+        const y = 0.55 + t * 5.95;
+        const angle = random() * TAU;
+        const radius = this.treeRadiusAt(y) * (0.86 + random() * 0.14);
+        const color = random() < 0.8
+          ? new THREE.Color().setHSL(0.12, 0.78, 0.62)
+          : new THREE.Color().setHSL(0.13, 0.42, 0.82);
+        lightEntries.push({
+          x: Math.cos(angle) * radius,
+          y,
+          z: Math.sin(angle) * radius,
+          color,
+          size: 0.22 + random() * 0.28,
+          phase: random() * TAU,
+          scatter: this.scatterTarget(),
+        });
+      }
+      const lights = new THREE.Points(
+        this.makeParticleGeometry(lightEntries),
+        this.makeParticleMaterial(0.82, 1.04),
+      );
+      lights.frustumCulled = false;
+      this.treeRoot.add(lights);
+    }
+
+    addScatterObject(object, base, target, baseRotation, targetRotation) {
+      object.position.copy(base);
+      if (baseRotation) object.rotation.copy(baseRotation);
+      this.treeRoot.add(object);
+      this.scatterObjects.push({
+        object,
+        base: base.clone(),
+        target: target.clone(),
+        baseRotation: baseRotation ? baseRotation.clone() : new THREE.Euler(),
+        targetRotation: targetRotation ? targetRotation.clone() : new THREE.Euler(),
+      });
+    }
+
+    buildApples() {
+      const random = this.random;
+      const count = this.mobile ? 22 : 34;
+      const appleGeometry = new THREE.SphereGeometry(0.115, 14, 10);
+      const appleMaterials = [0xbc2130, 0xd33a37, 0xa8162a].map((color) => new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.36,
+        metalness: 0.08,
+        emissive: new THREE.Color(color).multiplyScalar(0.08),
+      }));
+      const stemMaterial = new THREE.MeshStandardMaterial({ color: 0x4b2914, roughness: 0.9 });
+      const leafMaterial = new THREE.MeshStandardMaterial({ color: 0x2f6d3b, roughness: 0.7 });
+
+      for (let i = 0; i < count; i += 1) {
+        const y = 1.0 + random() * 5.45;
+        const angle = random() * TAU;
+        const radius = this.treeRadiusAt(y) * (0.9 + random() * 0.08);
+        const group = new THREE.Group();
+        const apple = new THREE.Mesh(appleGeometry, appleMaterials[i % appleMaterials.length]);
+        apple.scale.set(1, 0.9 + random() * 0.12, 1);
+        group.add(apple);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.014, 0.09, 5), stemMaterial);
+        stem.position.y = 0.12;
+        group.add(stem);
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.055, 7, 5), leafMaterial);
+        leaf.scale.set(1.5, 0.28, 0.65);
+        leaf.position.set(0.04, 0.14, 0.02);
+        leaf.rotation.z = -0.35;
+        group.add(leaf);
+        const base = new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+        group.rotation.set(random() * 0.4, random() * TAU, (random() - 0.5) * 0.35);
+        group.scale.setScalar(0.8 + random() * 0.55);
+        this.addScatterObject(
+          group,
+          base,
+          new THREE.Vector3((random() - 0.5) * 8.5, random() * 7.5, (random() - 0.5) * 4.5),
+          group.rotation,
+          new THREE.Euler(random() * TAU, random() * TAU, random() * TAU),
+        );
+      }
+    }
+
+    buildGiftObjects() {
+      const random = this.random;
+      const count = this.mobile ? 9 : 15;
+      const boxColors = [0x6c2130, 0x173e32, 0xc7b28a, 0x3c2828, 0x7c3a30];
+      const ribbonMaterial = new THREE.MeshStandardMaterial({
+        color: 0xd1a65d,
+        metalness: 0.45,
+        roughness: 0.3,
+        emissive: 0x3a2408,
+        emissiveIntensity: 0.35,
+      });
+
+      for (let i = 0; i < count; i += 1) {
+        const size = 0.18 + random() * 0.28;
+        const y = i < 5
+          ? 0.32 + random() * 0.35
+          : 0.9 + random() * 4.7;
+        const angle = random() * TAU;
+        const radius = i < 5
+          ? 1.5 + random() * 1.1
+          : this.treeRadiusAt(y) * (0.8 + random() * 0.22);
+        const group = new THREE.Group();
+        const box = new THREE.Mesh(
+          new THREE.BoxGeometry(size, size * 0.82, size),
+          new THREE.MeshStandardMaterial({
+            color: boxColors[i % boxColors.length],
+            roughness: 0.6,
+            metalness: 0.08,
+          }),
+        );
+        group.add(box);
+        const vertical = new THREE.Mesh(new THREE.BoxGeometry(size * 0.13, size * 0.84, size * 1.03), ribbonMaterial);
+        group.add(vertical);
+        const horizontal = new THREE.Mesh(new THREE.BoxGeometry(size * 1.03, size * 0.13, size * 0.84), ribbonMaterial);
+        horizontal.position.y = size * 0.12;
+        group.add(horizontal);
+        const base = new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+        group.rotation.set(random() * 0.5, random() * TAU, random() * 0.3);
+        group.scale.setScalar(0.8 + random() * 0.55);
+        this.addScatterObject(
+          group,
+          base,
+          new THREE.Vector3((random() - 0.5) * 9.5, random() * 7.8, (random() - 0.5) * 5),
+          group.rotation,
+          new THREE.Euler(random() * TAU, random() * TAU, random() * TAU),
+        );
+      }
+    }
+
+    makeStarTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext("2d");
+      const glow = ctx.createRadialGradient(128, 128, 0, 128, 128, 124);
+      glow.addColorStop(0, "rgba(255,230,171,.9)");
+      glow.addColorStop(0.22, "rgba(255,201,108,.4)");
+      glow.addColorStop(1, "rgba(255,170,50,0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, 256, 256);
+      ctx.translate(128, 128);
+      ctx.beginPath();
+      for (let i = 0; i < 10; i += 1) {
+        const angle = -Math.PI / 2 + (i / 10) * TAU;
+        const radius = i % 2 === 0 ? 78 : 28;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = "#f5d38a";
+      ctx.shadowColor = "#ffb64d";
+      ctx.shadowBlur = 22;
+      ctx.fill();
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
+      return texture;
+    }
+
+    buildParticleStar() {
+      const star = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: this.makeStarTexture(),
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.9,
+      }));
+      star.scale.set(1.45, 1.45, 1);
+      star.position.y = 7.02;
+      this.treeRoot.add(star);
+      this.starSprite = star;
+
+      const random = this.random;
+      const entries = [];
+      for (let i = 0; i < 90; i += 1) {
+        const angle = random() * TAU;
+        const radius = random() * 0.65;
+        entries.push({
+          x: Math.cos(angle) * radius,
+          y: 7.02 + (random() - 0.5) * 0.8,
+          z: Math.sin(angle) * radius,
+          color: new THREE.Color().setHSL(0.12, 0.8, 0.72),
+          size: 0.1 + random() * 0.16,
+          phase: random() * TAU,
+          scatter: this.scatterTarget(true),
+        });
+      }
+      const halo = new THREE.Points(
+        this.makeParticleGeometry(entries),
+        this.makeParticleMaterial(0.8),
+      );
+      halo.frustumCulled = false;
+      this.treeRoot.add(halo);
+      const light = new THREE.PointLight(0xffbc64, 1.1, 6, 2);
+      light.position.set(0, 7.02, 0.5);
+      this.treeRoot.add(light);
+      this.starLight = light;
     }
 
     buildTiers() {
@@ -842,6 +1261,10 @@
           texture: entry.texture,
           baseT: count ? index / count : 0,
           opacity: 0,
+          scatterU: (this.random() - 0.5) * 1.7,
+          scatterV: 0.12 + this.random() * 0.76,
+          scatterZ: 0.9 + this.random() * 2.2,
+          scatterTilt: (this.random() - 0.5) * 0.38,
         };
         group.add(mesh);
         nextCards.push(mesh);
@@ -889,13 +1312,23 @@
         // A shallow S that stays on the visible face of the cone. The
         // photographs swing left and right while following the branch
         // radius; all of them remain readable, none disappears backstage.
-        const angle = Math.sin(t * Math.PI * 2.35 + 0.2) * 1.18;
+        const angle = Math.sin(t * Math.PI * 3.0 + 0.2) * 1.18;
         const x = Math.sin(angle) * radius;
         const z = Math.cos(angle) * radius;
-        card.position.set(x, y, z);
-        card.rotation.set(0, 0, 0);
+        const scatterZ = card.userData.scatterZ;
+        const halfHeight = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * (this.camera.position.z - scatterZ);
+        const halfWidth = halfHeight * this.camera.aspect;
+        const scatterX = card.userData.scatterU * halfWidth * 0.92;
+        const scatterY = 3.5 + (card.userData.scatterV - 0.5) * halfHeight * 1.7;
+        card.position.set(
+          x + (scatterX - x) * this.spread,
+          y + (scatterY - y) * this.spread,
+          z + (scatterZ - z) * this.spread,
+        );
+        card.rotation.set(0, 0, card.userData.scatterTilt * this.spread);
         const edge = Math.min(1, Math.min(t, 1 - t) / 0.055);
-        const opacity = edge * (0.94 + 0.06 * (1 - t));
+        const baseOpacity = edge * (0.94 + 0.06 * (1 - t));
+        const opacity = baseOpacity + (1 - baseOpacity) * this.spread;
         card.material.opacity = opacity;
         card.visible = opacity > 0.015;
         card.userData.opacity = opacity;
@@ -907,12 +1340,39 @@
       const next = Math.max(this.minZoom, Math.min(this.maxZoom, value));
       if (Math.abs(next - this.zoom) < 0.0005) return;
       this.zoom = next;
-      this.root.scale.setScalar(next);
-      // Keep the middle of the tree in the same place while zooming, so the
-      // star and the gifts are not immediately pushed out of the canvas.
-      this.root.position.y = -this.zoomOriginY * (next - 1);
+      // Below 100% the tree simply shrinks. Above 100% only a small part of
+      // the gesture becomes scale; the rest becomes the dissolve into stars.
+      const scale = next <= 1
+        ? 0.9 + (next - 0.8) * 0.5
+        : 1 + (next - 1) * 0.28;
+      this.root.scale.setScalar(scale);
+      this.root.position.y = -this.zoomOriginY * (scale - 1);
+      this.spreadTarget = smoothstep(1.03, 1.36, next);
       if (notify) this.onZoom?.(next);
       this.renderFrame(performance.now(), true);
+    }
+
+    applySpread() {
+      const spread = this.spread;
+      const spreadX = Math.min(1, Math.max(0.25, this.camera.aspect / 1.35));
+      this.particleMaterials.forEach((material) => {
+        material.uniforms.uSpread.value = spread;
+        material.uniforms.uSpreadX.value = spreadX;
+      });
+      this.scatterObjects.forEach((entry) => {
+        entry.object.position.set(
+          entry.base.x + (entry.target.x - entry.base.x) * spread * spreadX,
+          entry.base.y + (entry.target.y - entry.base.y) * spread,
+          entry.base.z + (entry.target.z - entry.base.z) * spread,
+        );
+        entry.object.rotation.set(
+          entry.baseRotation.x + (entry.targetRotation.x - entry.baseRotation.x) * spread,
+          entry.baseRotation.y + (entry.targetRotation.y - entry.baseRotation.y) * spread,
+          entry.baseRotation.z + (entry.targetRotation.z - entry.baseRotation.z) * spread,
+        );
+      });
+      if (this.aura) this.aura.material.opacity = 0.65 * (1 - spread * 0.88);
+      if (this.starSprite) this.starSprite.material.opacity = 0.9 * (1 - spread * 0.24);
     }
 
     zoomBy(delta) {
@@ -1078,18 +1538,25 @@
     renderFrame(now, force = false) {
       const dt = Math.min(0.05, Math.max(0, (now - this.lastTime) / 1000));
       this.lastTime = now;
-      // The tree stays still; only the photographs drift along the S.
-      this.root.rotation.set(0, 0, 0);
+      this.spread += (this.spreadTarget - this.spread) * Math.min(1, dt * 6);
+      if (Math.abs(this.spreadTarget - this.spread) < 0.0004) this.spread = this.spreadTarget;
+      if (!this.paused) {
+        this.treeRotation += dt * this.treeSpeed * (1 - this.spread * 0.55);
+      }
+      this.treeRoot.rotation.y = this.treeRotation;
+      this.applySpread();
       this.updatePhotoRibbon(now, dt);
       this.root.updateMatrixWorld(true);
 
-      if (this.lightUniforms) this.lightUniforms.uTime.value = now * 0.001;
-      if (this.starGlow) {
-        const pulse = 0.22 + Math.sin(now * 0.0016) * 0.055;
-        this.starGlow.material.opacity = pulse;
-        this.starGlow.scale.setScalar(1.55 + Math.sin(now * 0.0016) * 0.08);
+      this.particleMaterials.forEach((material) => {
+        material.uniforms.uTime.value = now * 0.001;
+      });
+      if (this.starSprite) {
+        const pulse = 0.9 + Math.sin(now * 0.0016) * 0.08;
+        this.starSprite.material.opacity = pulse * (1 - this.spread * 0.24);
+        this.starSprite.scale.setScalar(1.42 + Math.sin(now * 0.0016) * 0.06);
       }
-      if (this.starLight) this.starLight.intensity = 1.25 + Math.sin(now * 0.0021) * 0.18;
+      if (this.starLight) this.starLight.intensity = 1.1 + Math.sin(now * 0.0021) * 0.16;
       if (this.snowPositions && this.snowPoints) {
         for (let i = 0; i < this.snowSpeeds.length; i += 1) {
           this.snowPositions[i * 3 + 1] -= this.snowSpeeds[i] * dt;

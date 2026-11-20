@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="200 件泡泡玛特藏品沿 S 形环绕在放大的 3D 圣诞树上缓慢流动，可滚轮或双指缩放整棵树与照片，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
+  <meta name="description" content="由发光粒子、苹果、礼物盒和 200 件泡泡玛特照片组成的 3D 圣诞树缓慢旋转；放大会散成满天星尘，照片可以点击欣赏。27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。星屿藏馆 · STELLAR ARCHIVE。">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0a0507">
   <meta name="color-scheme" content="dark">
@@ -12,21 +12,21 @@
   <meta property="og:locale" content="zh_CN">
   <meta property="og:site_name" content="星屿藏馆 · STELLAR ARCHIVE">
   <meta property="og:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta property="og:description" content="200 件泡泡玛特藏品沿 S 形环绕在放大的 3D 圣诞树上缓慢流动，可滚轮或双指缩放整棵树与照片，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
+  <meta property="og:description" content="由发光粒子、苹果、礼物盒和 200 件泡泡玛特照片组成的 3D 圣诞树缓慢旋转；放大会散成满天星尘，照片可以点击欣赏。27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
   <meta property="og:url" content="https://ac1314-520.github.io/stellar-archive/">
   <meta property="og:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="星屿藏馆：放大的 3D 圣诞树与沿 S 形环绕的泡泡玛特藏品照片">
+  <meta property="og:image:alt" content="星屿藏馆：由粒子、苹果、礼物盒和照片组成的 3D 圣诞树">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="星屿藏馆 · 泡泡玛特圣诞电子藏品馆">
-  <meta name="twitter:description" content="200 件泡泡玛特藏品沿 S 形环绕在放大的 3D 圣诞树上缓慢流动，可滚轮或双指缩放整棵树与照片，点击照片可拖拽 360° 欣赏；27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
+  <meta name="twitter:description" content="由发光粒子、苹果、礼物盒和 200 件泡泡玛特照片组成的 3D 圣诞树缓慢旋转；放大会散成满天星尘，照片可以点击欣赏。27 个 IP 分类，识藏室支持 DeepSeek 联网检索与豆包等视觉 API。">
   <meta name="twitter:image" content="https://ac1314-520.github.io/stellar-archive/assets/preview/og-cover.jpg">
   <title>星屿藏馆 · 泡泡玛特圣诞电子藏品馆</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%230c0608'/%3E%3Cpath d='M32 9c1.4 12.5 9.1 20.2 21.6 21.6C41.1 32.1 33.4 39.8 32 52.3 30.6 39.8 22.9 32.1 10.4 30.6 22.9 29.2 30.6 21.5 32 9Z' fill='%23e8c398'/%3E%3Ccircle cx='32' cy='31' r='3.2' fill='%230c0608'/%3E%3C/svg%3E">
   <link rel="preload" href="assets/fonts/cormorant-garamond-400.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/manrope-400.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/styles.css?v=20261120c">
+  <link rel="stylesheet" href="css/styles.css?v=20261120d">
 </head>
 <body>
   <a class="skip-link" href="#collection">跳到藏品馆</a>
@@ -102,13 +102,13 @@
       <div class="tree-view__bloom" aria-hidden="true"></div>
       <div class="star-dust" id="starDust" aria-hidden="true"></div>
 
-      <div class="tree-stage" id="treeStage" aria-label="十幅藏品照片沿 S 形贴合在圣诞树上缓慢流动，可用滚轮或双指缩放圣诞树。点击照片可以放大欣赏。">
+      <div class="tree-stage" id="treeStage" aria-label="由粒子、苹果、礼物盒和十幅照片组成的 3D 圣诞树缓慢旋转。放大时整棵树会散成星尘，照片可用滚轮或双指缩放。点击照片可以放大欣赏。">
         <div class="tree-stage__halo" aria-hidden="true"></div>
         <div class="tree-stage__floor" aria-hidden="true"></div>
         <div class="tree-sculpture" id="treeSculpture">
           <div class="tree-sculpture__aura" aria-hidden="true"></div>
           <canvas class="tree-canvas" id="treeCanvas" aria-hidden="true"></canvas>
-          <img class="tree-fallback-image" id="treeFallback" src="assets/tree-fallback.webp?v=20261120c" alt="圣诞树静态展示" hidden>
+          <img class="tree-fallback-image" id="treeFallback" src="assets/tree-fallback.webp?v=20261120d" alt="圣诞树静态展示" hidden>
         </div>
         <div class="photo-orbit" id="photoOrbit" hidden></div>
       </div>
@@ -129,7 +129,7 @@
           藏品一件件，星光一幕幕。<br>
           围着圣诞树，慢慢走进光里。
         </p>
-        <p class="hero__mobile-hint"><span aria-hidden="true">✦</span> 双指缩放 · 轻点照片 · 360° 欣赏</p>
+        <p class="hero__mobile-hint"><span aria-hidden="true">✦</span> 双指放大 · 散成星尘 · 轻点照片</p>
         <div class="hero__meta">
           <div class="hero__stat">
             <strong id="heroCount">200</strong>
@@ -154,7 +154,7 @@
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v14M3 10h14"/></svg>
           </button>
         </div>
-        <p class="hero__orbit-hint">滚轮 / 双指缩放 · 点击照片放大 · 一幕接一幕</p>
+        <p class="hero__orbit-hint">滚轮 / 双指缩放 · 放大散成星尘 · 点击照片</p>
       </div>
 
       <aside class="act-rail" aria-label="展幕索引">
@@ -181,9 +181,9 @@
 
       <div class="tree-dock tree-dock--acts" id="treeDock">
         <div class="tree-dock__group">
-          <button class="dock-btn" type="button" data-orbit-action="toggle" aria-pressed="false" title="暂停 / 继续照片">
+          <button class="dock-btn" type="button" data-orbit-action="toggle" aria-pressed="false" title="暂停 / 继续圣诞树旋转">
             <span class="dock-btn__icon" data-orbit-icon>Ⅱ</span>
-            <span class="dock-btn__label" data-orbit-label>暂停照片</span>
+            <span class="dock-btn__label" data-orbit-label>暂停旋转</span>
           </button>
         </div>
         <div class="tree-dock__center tree-dock__center--act">
@@ -659,10 +659,10 @@
     <div class="noscript">星屿藏馆需要 JavaScript 才能点亮星树。请在浏览器中启用 JavaScript 后重新打开。</div>
   </noscript>
 
-  <script src="js/series.js?v=20261120c"></script>
-  <script src="js/collection-data.js?v=20261120c"></script>
-  <script src="js/vendor/three.min.js?v=20261120c"></script>
-  <script src="js/tree-scene.js?v=20261120c"></script>
-  <script src="js/app.js?v=20261120c"></script>
+  <script src="js/series.js?v=20261120d"></script>
+  <script src="js/collection-data.js?v=20261120d"></script>
+  <script src="js/vendor/three.min.js?v=20261120d"></script>
+  <script src="js/tree-scene.js?v=20261120d"></script>
+  <script src="js/app.js?v=20261120d"></script>
 </body>
 </html>

@@ -726,6 +726,13 @@ ${known}
 
   function updateTreeZoomLabel(value) {
     if (el.treeZoomValue) el.treeZoomValue.textContent = `${Math.round(value * 100)}%`;
+    if (el.treeView) {
+      const spread = value >= 1.12;
+      if (el.treeView.classList.contains("is-spread") !== spread) {
+        el.treeView.classList.toggle("is-spread", spread);
+        window.requestAnimationFrame(() => state.treeScene?.resize());
+      }
+    }
   }
 
   function updateTreePhotoList() {
@@ -857,7 +864,7 @@ ${known}
   function updateOrbitUI() {
     const paused = state.orbit.paused;
     $$("[data-orbit-label]").forEach((label) => {
-      label.textContent = paused ? "继续照片" : "暂停照片";
+      label.textContent = paused ? "继续旋转" : "暂停旋转";
     });
     $$("[data-orbit-icon]").forEach((icon) => {
       icon.textContent = paused ? "▶" : "Ⅱ";
